@@ -8,7 +8,7 @@ from contextlib import asynccontextmanager
 
 from app.core.config import settings
 from app.core.logging import setup_logging
-from app.core.middleware import MaxBodySizeMiddleware
+from app.core.middleware import MaxBodySizeMiddleware, APIContractMiddleware
 from app.api.v1.router import api_router
 from app.db.session import engine
 from app.db import base  # noqa: F401 — import models for Alembic
@@ -41,7 +41,8 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Order matters: MaxBodySize before CORS
+# Order matters: APIContract -> MaxBodySize -> CORS
+app.add_middleware(APIContractMiddleware)
 app.add_middleware(MaxBodySizeMiddleware)
 app.add_middleware(
     CORSMiddleware,
@@ -59,10 +60,19 @@ async def health():
     return {"status": "ok", "service": "VaidyaAI"}
 
 
-@app.get("/", include_in_schema=False)
-async def root_redirect():
-    """Redirect / to the home page."""
-    return RedirectResponse(url="/ui/index.html")
+@app.get("/")
+async def root():
+    """Platform metadata and medical disclaimer."""
+    return {
+        "platform": "VaidyaAI Medical Intelligence",
+        "version": "1.0.0",
+        "medical_disclaimer": settings.MEDICAL_DISCLAIMER,
+        "endpoints": {
+            "health": "/api/v1/health",
+            "docs": "/docs",
+            "ui": "/ui/index.html"
+        }
+    }
 
 
 # ── Static file serving ───────────────────────────────────────────────────────

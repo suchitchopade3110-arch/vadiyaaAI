@@ -1,26 +1,38 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+from typing import Optional, List, Dict, Any
 from uuid import UUID
-from datetime import datetime
-from app.models.report import ReportType
-from app.core.config import settings
+from enum import Enum
+from app.schemas.common import BaseResponse, ConfidenceSignal, SourceCitation, ExtractedEntities
 
+class ReportTypeEnum(str, Enum):
+    LAB       = "lab"
+    CLINICAL  = "clinical"
+    DISCHARGE = "discharge"
 
-class ReportResponse(BaseModel):
-    id: UUID
-    report_type: ReportType
-    confidence: float | None = None
-    parsed_data: dict | None = None
-    analysis_result: dict | None = None
-    source_citations: list | None = None
-    uncertainty_flag: bool
-    celery_task_id: str | None = None
-    medical_disclaimer: str = settings.MEDICAL_DISCLAIMER
-    created_at: datetime
+class ReportAsyncResponse(BaseResponse):
+    report_id: UUID
+    task_id: str
+    status: str = "pending"
+    report_type: ReportTypeEnum
+    poll_url: str
+    estimated_seconds: int = 20
 
-    model_config = {"from_attributes": True}
+class AnomalyFlag(BaseModel):
+    parameter: str
+    value: Any
+    reference_range: str
+    severity: str   # mild | moderate | severe
 
-
-class ReportStatusResponse(BaseModel):
-    id: UUID
-    celery_task_id: str | None = None
-    medical_disclaimer: str = settings.MEDICAL_DISCLAIMER
+class ReportResult(BaseResponse):
+    report_id: UUID
+    report_type: ReportTypeEnum
+    extracted_entities: ExtractedEntities
+    raw_text_preview: Optional[str] = None
+    risk_score: float = Field(..., ge=0, le=100)
+    risk_factors: List[str]
+    anomalies: List[AnomalyFlag]
+    shap_values: Optional[Dict] = None
+    explanation: str
+    sources: List[SourceCitation]
+    confidence: ConfidenceSignal
+    processing_time_ms: Optional[float] = None

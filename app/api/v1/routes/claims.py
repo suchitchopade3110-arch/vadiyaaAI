@@ -1,64 +1,118 @@
+"""
+VaidyaAI — Claim Verification Route
+POST /verify/claim/{claim_id}
+"""
+
+import uuid
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from uuid import UUID
+from celery.result import AsyncResult
+from datetime import datetime
 
 from app.db.session import get_db
-from app.schemas.claim import ClaimCreateRequest, ClaimResponse, ClaimStatusResponse
-from app.services.claim_service import ClaimService
+from app.schemas.claim import ClaimRequest, ClaimAsyncResponse, ClaimResult
+from app.schemas.job import JobStatus
+from app.workers.claim_tasks import verify_claim
+from app.core.disclaimer import MEDICAL_DISCLAIMER
+from app.workers.db_persist import insert_claim
 
 router = APIRouter()
 
 
-@router.post(
-    "/claim",
-    response_model=ClaimResponse,
-    status_code=status.HTTP_202_ACCEPTED,
-    summary="Submit medical claim for verification",
-)
+@router.post("/claim/{claim_id}", response_model=ClaimAsyncResponse, status_code=202)
 async def submit_claim(
-    payload: ClaimCreateRequest,
+    claim_id: str,
+    payload: ClaimRequest,
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Submit a medical claim text for AI-assisted verification.
-
-    Routes to: ClinicalBERT NER → BioGPT → ChromaDB → GPT-4/Llama → Hallucination check.
-
-    Returns async job ID. Poll /verify/claim/{claim_id}/status for result.
-
-    ⚠️ Output is AI-assisted only. NOT a medical diagnosis.
+    Submit a medical claim for verification.
+    
+    Returns immediately with task_id. Poll /verify/claim/status/{task_id} for result.
+    
+    Pipeline (async):
+    ClinicalBERT NER → BioGPT → ChromaDB → GPT-4/Llama → Hallucination Check
     """
-    service = ClaimService(db)
-    return await service.submit(payload)
+    request_id = str(uuid.uuid4())
+
+    # ── Dispatch Celery task ───────────────────────────────────────────────
+    task = verify_claim.apply_async(
+        args=[claim_id, payload.claim_text],
+        kwargs={"patient_id": str(payload.patient_id) if payload.patient_id else None},
+        priority=9 if payload.priority == "high" else 5,
+        queue="claims",
+    )
+
+    # ── Insert pending row in DB ───────────────────────────────────────────
+    insert_claim(claim_id, payload.claim_text, task.id,
+                 str(payload.patient_id) if payload.patient_id else None)
+
+    return ClaimAsyncResponse(
+        request_id=request_id,
+        claim_id=uuid.UUID(claim_id) if _is_valid_uuid(claim_id) else uuid.uuid4(),
+        task_id=task.id,
+        status="pending",
+        poll_url=f"/api/v1/verify/claim/status/{task.id}",
+        estimated_seconds=15,
+        medical_disclaimer=MEDICAL_DISCLAIMER,
+    )
 
 
-@router.get(
-    "/claim/{claim_id}",
-    response_model=ClaimResponse,
-    summary="Get claim verification result",
-)
-async def get_claim(
-    claim_id: UUID,
-    db: AsyncSession = Depends(get_db),
-):
-    service = ClaimService(db)
-    result = await service.get(claim_id)
-    if not result:
-        raise HTTPException(status_code=404, detail="Claim not found")
-    return result
+@router.get("/claim/status/{task_id}", response_model=JobStatus)
+async def get_claim_status(task_id: str):
+    """Poll claim verification job status."""
+    request_id = str(uuid.uuid4())
+    result = AsyncResult(task_id)
+
+    state = result.state
+    meta = result.info or {}
+
+    if state == "PENDING":
+        return JobStatus(request_id=request_id, task_id=task_id, status="pending")
+    elif state == "PROGRESS":
+        return JobStatus(
+            request_id=request_id,
+            task_id=task_id,
+            status="processing",
+            progress_pct=meta.get("pct", 0),
+        )
+    elif state == "SUCCESS":
+        return JobStatus(
+            request_id=request_id,
+            task_id=task_id,
+            status="complete",
+            progress_pct=100,
+            result_url=f"/api/v1/verify/claim/result/{task_id}",
+        )
+    elif state == "FAILURE":
+        return JobStatus(
+            request_id=request_id,
+            task_id=task_id,
+            status="failed",
+            error=str(meta),
+        )
+    return JobStatus(request_id=request_id, task_id=task_id, status=state.lower())
 
 
-@router.get(
-    "/claim/{claim_id}/status",
-    response_model=ClaimStatusResponse,
-    summary="Poll async job status for claim",
-)
-async def claim_status(
-    claim_id: UUID,
-    db: AsyncSession = Depends(get_db),
-):
-    service = ClaimService(db)
-    result = await service.get_status(claim_id)
-    if not result:
-        raise HTTPException(status_code=404, detail="Claim not found")
-    return result
+@router.get("/claim/result/{task_id}")
+async def get_claim_result(task_id: str):
+    """Retrieve completed claim verification result."""
+    result = AsyncResult(task_id)
+    
+    if result.state != "SUCCESS":
+        raise HTTPException(
+            status_code=status.HTTP_425_TOO_EARLY,
+            detail=f"Task not complete. Status: {result.state}. Poll /api/v1/verify/claim/status/{task_id}",
+        )
+    
+    data = result.result
+    data["request_id"] = str(uuid.uuid4())
+    return data
+
+
+def _is_valid_uuid(val: str) -> bool:
+    try:
+        uuid.UUID(val)
+        return True
+    except ValueError:
+        return False

@@ -33,7 +33,7 @@ class ReportService:
         await self.db.flush()
 
         # 4. Celery dispatch
-        from app.workers.tasks import run_report_pipeline
+        from app.workers.report_tasks import run_report_pipeline
         task = run_report_pipeline.delay(str(report.id))
         report.celery_task_id = task.id
 

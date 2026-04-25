@@ -21,7 +21,7 @@ class ClaimService:
         await self.db.flush()  # get ID before commit
 
         # Dispatch to Celery
-        from app.workers.tasks import run_claim_pipeline
+        from app.workers.claim_tasks import run_claim_pipeline
         task = run_claim_pipeline.delay(str(claim.id))
         claim.celery_task_id = task.id
         claim.status = ClaimStatus.PROCESSING

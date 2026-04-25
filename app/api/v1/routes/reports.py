@@ -1,67 +1,120 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
+"""
+VaidyaAI — Report Analysis Route
+POST /analyze/report/{report_type}
+"""
+
+import uuid
+from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from uuid import UUID
+from celery.result import AsyncResult
 
 from app.db.session import get_db
-from app.models.report import ReportType
-from app.schemas.report import ReportResponse, ReportStatusResponse
-from app.services.report_service import ReportService
+from app.schemas.report import ReportAsyncResponse, ReportTypeEnum
+from app.schemas.job import JobStatus
+from app.services.file_upload import file_upload_service
+from app.workers.report_tasks import analyze_report
+from app.core.disclaimer import MEDICAL_DISCLAIMER
+from app.workers.db_persist import insert_report
 
 router = APIRouter()
 
+VALID_REPORT_TYPES = {t.value for t in ReportTypeEnum}
 
-@router.post(
-    "/report/{report_type}",
-    response_model=ReportResponse,
-    status_code=status.HTTP_202_ACCEPTED,
-    summary="Submit lab/clinical report for AI analysis",
-)
-async def analyze_report(
-    report_type: ReportType,
-    file: UploadFile = File(...),
-    patient_id: UUID | None = None,
+
+@router.post("/report/{report_type}", response_model=ReportAsyncResponse, status_code=202)
+async def submit_report_analysis(
+    report_type: str,
+    file: UploadFile = File(..., description="Lab report / clinical note: PDF or CSV"),
+    patient_id: str = None,
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Upload a PDF/CSV medical report for extraction + analysis.
-
-    Pipeline: OCR → ClinicalBERT NER → XGBoost → SHAP → LLM explain → RAG citations.
-
-    Returns async job ID.
-
-    ⚠️ Output is AI-assisted only. NOT a medical diagnosis.
+    Submit lab report / clinical note for analysis.
+    
+    Supported report types: lab | clinical | discharge
+    Supported formats: .pdf, .csv
+    
+    Pipeline (async):
+    OCR → ClinicalBERT NER → XGBoost → SHAP → Anomaly Detection → LLM Explain
+    
+    Returns immediately. Poll /api/v1/analyze/report/status/{task_id} for result (~10–20s).
     """
-    service = ReportService(db)
-    return await service.submit(file=file, report_type=report_type, patient_id=patient_id)
+    if report_type not in VALID_REPORT_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Invalid report_type '{report_type}'. Valid: {VALID_REPORT_TYPES}",
+        )
+
+    request_id = str(uuid.uuid4())
+    report_id = str(uuid.uuid4())
+
+    # ── Save uploaded file ─────────────────────────────────────────────────
+    file_path, extension, pipeline_type = await file_upload_service.validate_and_save(
+        file, sub_dir=f"reports/{report_id}"
+    )
+
+    if pipeline_type != "text":
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail=f"File type '.{extension}' is not a supported report format. Use PDF or CSV.",
+        )
+
+    # ── Dispatch Celery task ───────────────────────────────────────────────
+    task = analyze_report.apply_async(
+        args=[report_id, file_path, report_type, extension],
+        queue="reports",
+    )
+
+    # ── Insert pending row in DB ───────────────────────────────────────────
+    insert_report(report_id, report_type, file_path, extension, task.id, patient_id)
+
+    return ReportAsyncResponse(
+        request_id=request_id,
+        report_id=uuid.UUID(report_id),
+        task_id=task.id,
+        status="pending",
+        report_type=ReportTypeEnum(report_type),
+        poll_url=f"/api/v1/analyze/report/status/{task.id}",
+        estimated_seconds=20,
+        medical_disclaimer=MEDICAL_DISCLAIMER,
+    )
 
 
-@router.get(
-    "/report/{report_id}",
-    response_model=ReportResponse,
-    summary="Get report analysis result",
-)
-async def get_report(
-    report_id: UUID,
-    db: AsyncSession = Depends(get_db),
-):
-    service = ReportService(db)
-    result = await service.get(report_id)
-    if not result:
-        raise HTTPException(status_code=404, detail="Report not found")
-    return result
+@router.get("/report/status/{task_id}", response_model=JobStatus)
+async def get_report_status(task_id: str):
+    """Poll report analysis job status."""
+    request_id = str(uuid.uuid4())
+    result = AsyncResult(task_id)
+    state = result.state
+    meta = result.info or {}
+
+    if state == "PENDING":
+        return JobStatus(request_id=request_id, task_id=task_id, status="pending")
+    elif state == "PROGRESS":
+        return JobStatus(
+            request_id=request_id, task_id=task_id,
+            status="processing", progress_pct=meta.get("pct", 0),
+        )
+    elif state == "SUCCESS":
+        return JobStatus(
+            request_id=request_id, task_id=task_id,
+            status="complete", progress_pct=100,
+            result_url=f"/api/v1/analyze/report/result/{task_id}",
+        )
+    elif state == "FAILURE":
+        return JobStatus(request_id=request_id, task_id=task_id, status="failed", error=str(meta))
+    return JobStatus(request_id=request_id, task_id=task_id, status=state.lower())
 
 
-@router.get(
-    "/report/{report_id}/status",
-    response_model=ReportStatusResponse,
-    summary="Poll async job status for report",
-)
-async def report_status(
-    report_id: UUID,
-    db: AsyncSession = Depends(get_db),
-):
-    service = ReportService(db)
-    result = await service.get_status(report_id)
-    if not result:
-        raise HTTPException(status_code=404, detail="Report not found")
-    return result
+@router.get("/report/result/{task_id}")
+async def get_report_result(task_id: str):
+    """Retrieve completed report analysis result."""
+    result = AsyncResult(task_id)
+    if result.state != "SUCCESS":
+        raise HTTPException(
+            status_code=status.HTTP_425_TOO_EARLY,
+            detail=f"Task not complete. Status: {result.state}",
+        )
+    data = result.result
+    data["request_id"] = str(uuid.uuid4())
+    return data

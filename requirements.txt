@@ -1,24 +1,68 @@
-# Web
-fastapi==0.115.0
-uvicorn[standard]==0.30.6
-python-multipart==0.0.9
+# ── VaidyaAI Requirements ─────────────────────────────────────────────────────
+# Phase 1: Backend skeleton + async queue
+# Phase 2 additions marked with TODO
 
-# DB
-sqlalchemy==2.0.36
-asyncpg==0.29.0          # async — FastAPI
-psycopg2-binary==2.9.9   # sync — Celery workers
-alembic==1.13.3
+# ── FastAPI + Server ──────────────────────────────────────────────────────────
+fastapi==0.111.0
+uvicorn[standard]==0.29.0
+python-multipart==0.0.9          # File uploads
 
-# Config
-pydantic==2.9.2
-pydantic-settings==2.5.2
+# ── Database ──────────────────────────────────────────────────────────────────
+sqlalchemy==2.0.30
+asyncpg==0.29.0                  # Async PostgreSQL driver
+alembic==1.13.1                  # DB migrations
 
-# Async task queue
-celery==5.4.0
-redis==5.1.1
-
-# Utils
+# ── Config ────────────────────────────────────────────────────────────────────
+pydantic==2.7.1
+pydantic-settings==2.2.1
 python-dotenv==1.0.1
-python-magic==0.4.27
-aiofiles>=23.0.0         # required by FastAPI StaticFiles
-pandas>=2.0.0
+
+# ── Celery + Redis ────────────────────────────────────────────────────────────
+celery[redis]==5.4.0
+redis==5.0.4
+flower==2.0.1                    # Celery monitoring UI
+aiofiles==23.2.1
+
+# ── HTTP Client ───────────────────────────────────────────────────────────────
+httpx==0.27.0
+
+# ── Image Processing (Phase 1: basic; Phase 2: full pipeline) ─────────────────
+Pillow==10.3.0
+opencv-python-headless==4.9.0.80
+pydicom==2.4.4                   # DICOM parsing
+
+# ── OCR ───────────────────────────────────────────────────────────────────────
+pytesseract==0.3.10
+PyMuPDF==1.24.3                  # PDF text extraction
+
+# ── Data ──────────────────────────────────────────────────────────────────────
+pandas==2.2.2
+numpy==1.26.4
+
+# ── ML (Phase 1: install only; Phase 2: wire into pipeline) ──────────────────
+scikit-learn==1.4.2
+xgboost==2.0.3
+torch==2.3.0                     # PyTorch (CPU; Phase 2: GPU)
+# torchvision==0.18.0            # Uncomment Phase 2 (CheXNet)
+
+# ── NLP / LLM (Phase 1: install only; Phase 2: wire) ─────────────────────────
+transformers==4.41.1             # ClinicalBERT, BioGPT
+langchain==0.2.1
+langchain-community==0.2.1
+chromadb==0.5.0
+
+# ── Explainability (Phase 2) ──────────────────────────────────────────────────
+shap==0.45.1
+# grad-cam==1.4.8                # Uncomment Phase 2
+
+# ── OpenAI (Phase 2: LLM reasoning) ──────────────────────────────────────────
+openai==1.30.1
+
+# ── Testing ───────────────────────────────────────────────────────────────────
+pytest==8.2.0
+pytest-asyncio==0.23.6
+httpx==0.27.0                    # Test client
+
+# ── Dev Tools ─────────────────────────────────────────────────────────────────
+black==24.4.2
+isort==5.13.2

@@ -1,20 +1,26 @@
 {
 
-// dashboard.jsx — Dashboard page component
+// dashboard.jsx — Dashboard page component (wired to real API)
 
 const { useState, useEffect } = React;
 
-const MOCK_JOBS = [
-  { id: 'JOB-001', type: 'claim',  status: 'verified',   created: '2026-04-25 09:14', desc: 'Aspirin reduces MI risk by 25%' },
-  { id: 'JOB-002', type: 'report', status: 'processing',  created: '2026-04-25 09:08', desc: 'Lab panel — John D.' },
-  { id: 'JOB-003', type: 'image',  status: 'verified',   created: '2026-04-25 08:55', desc: 'Chest X-ray analysis' },
-  { id: 'JOB-004', type: 'claim',  status: 'refuted',    created: '2026-04-25 08:30', desc: 'High-dose Vit C cures cancer' },
-  { id: 'JOB-005', type: 'image',  status: 'uncertain',  created: '2026-04-25 08:12', desc: 'MRI brain scan — PT-20240120' },
-  { id: 'JOB-006', type: 'report', status: 'failed',     created: '2026-04-25 07:50', desc: 'Discharge summary upload' },
-];
+const API_BASE = '/api/v1';
 
 const PIPELINE_ICONS = { claim: '◎', report: '▤', image: '⬡' };
 const PIPELINE_LABELS = { claim: 'Claim', report: 'Report', image: 'Image' };
+
+// Map backend status values to frontend display statuses
+function mapStatus(pipeline, statusVal) {
+  if (!statusVal) return 'pending';
+  const s = statusVal.toLowerCase();
+  if (s === 'verified' || s === 'success') return 'verified';
+  if (s === 'processing' || s === 'started') return 'processing';
+  if (s === 'pending') return 'pending';
+  if (s === 'refuted' || s === 'contradicted') return 'refuted';
+  if (s === 'uncertain' || s === 'insufficient_evidence') return 'uncertain';
+  if (s === 'failed' || s === 'failure') return 'failed';
+  return 'pending';
+}
 
 function StatCard({ icon, label, value, color, sub }) {
   return (
@@ -60,17 +66,51 @@ function QuickAction({ icon, label, sub, onClick }) {
 
 function Dashboard({ onNavigate }) {
   const [health, setHealth] = useState('checking');
+  const [jobs, setJobs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
+  // Real health check
   useEffect(() => {
-    const t = setTimeout(() => setHealth('online'), 1200);
-    return () => clearTimeout(t);
+    fetch('/health')
+      .then(res => res.json())
+      .then(data => setHealth(data.status === 'ok' ? 'online' : 'offline'))
+      .catch(() => setHealth('offline'));
+  }, []);
+
+  // Fetch real jobs from the API
+  useEffect(() => {
+    setLoading(true);
+    fetch(`${API_BASE}/jobs?limit=20`)
+      .then(res => {
+        if (!res.ok) throw new Error(`API returned ${res.status}`);
+        return res.json();
+      })
+      .then(data => {
+        const mapped = (data.jobs || []).map(j => ({
+          id: j.job_id ? j.job_id.slice(0, 8) : '—',
+          fullId: j.job_id,
+          type: j.pipeline.includes('/') ? j.pipeline.split('/')[0] : j.pipeline,
+          status: mapStatus(j.pipeline, j.status),
+          created: j.created_at ? new Date(j.created_at).toLocaleString() : '—',
+          desc: `${j.pipeline} analysis`,
+          celeryId: j.celery_task_id,
+        }));
+        setJobs(mapped);
+        setLoading(false);
+      })
+      .catch(err => {
+        console.warn('Jobs API unavailable, no jobs to show:', err.message);
+        setJobs([]);
+        setLoading(false);
+      });
   }, []);
 
   const counts = {
-    total:      MOCK_JOBS.length,
-    verified:   MOCK_JOBS.filter(j => j.status === 'verified').length,
-    processing: MOCK_JOBS.filter(j => j.status === 'processing').length,
-    failed:     MOCK_JOBS.filter(j => j.status === 'failed').length,
+    total:      jobs.length,
+    verified:   jobs.filter(j => j.status === 'verified').length,
+    processing: jobs.filter(j => j.status === 'processing').length,
+    failed:     jobs.filter(j => j.status === 'failed').length,
   };
 
   return (
@@ -84,7 +124,7 @@ function Dashboard({ onNavigate }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <div style={{
             width: '8px', height: '8px', borderRadius: '50%',
-            background: health === 'online' ? 'oklch(0.46 0.19 145)' : 'oklch(0.75 0.14 60)',
+            background: health === 'online' ? 'oklch(0.46 0.19 145)' : health === 'offline' ? 'oklch(0.65 0.20 25)' : 'oklch(0.75 0.14 60)',
             boxShadow: health === 'online' ? '0 0 8px oklch(0.46 0.19 145)' : 'none',
             animation: health === 'checking' ? 'pulse-dot 1.2s ease infinite' : 'none',
           }} />
@@ -96,7 +136,7 @@ function Dashboard({ onNavigate }) {
 
       {/* Stats row */}
       <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-        <StatCard icon="◎" label="Total Jobs" value={counts.total} sub="last 24h" />
+        <StatCard icon="◎" label="Total Jobs" value={counts.total} sub="from database" />
         <StatCard icon="✓" label="Verified" value={counts.verified} color="oklch(0.46 0.19 145)" sub="claims & reports" />
         <StatCard icon="↻" label="Processing" value={counts.processing} color="oklch(0.46 0.19 145)" sub="in pipeline" />
         <StatCard icon="!" label="Failed" value={counts.failed} color="oklch(0.65 0.20 25)" sub="need attention" />
@@ -114,30 +154,39 @@ function Dashboard({ onNavigate }) {
 
       {/* Recent jobs table */}
       <div>
-        <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '12px' }}>Recent Jobs</div>
+        <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '12px' }}>
+          Recent Jobs {loading && <span style={{ fontWeight: 400, animation: 'fade-in-out 1.4s ease infinite' }}>loading…</span>}
+        </div>
         <div style={{
           background: 'var(--bg-surface)', border: '1px solid var(--border)',
           borderRadius: '10px', overflow: 'hidden',
         }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                {['Job ID', 'Pipeline', 'Description', 'Status', 'Created', ''].map((h, i) => (
-                  <th key={i} style={{
-                    padding: '11px 16px', textAlign: 'left',
-                    fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)',
-                    textTransform: 'uppercase', letterSpacing: '0.06em',
-                    background: 'var(--bg-elevated)',
-                  }}>{h}</th>
+          {jobs.length === 0 && !loading ? (
+            <div style={{ padding: '32px', textAlign: 'center' }}>
+              <div style={{ fontSize: '24px', opacity: 0.3, marginBottom: '8px' }}>◫</div>
+              <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>No jobs yet. Submit a claim, report, or image to get started.</div>
+            </div>
+          ) : (
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                  {['Job ID', 'Pipeline', 'Description', 'Status', 'Created', ''].map((h, i) => (
+                    <th key={i} style={{
+                      padding: '11px 16px', textAlign: 'left',
+                      fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)',
+                      textTransform: 'uppercase', letterSpacing: '0.06em',
+                      background: 'var(--bg-elevated)',
+                    }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {jobs.map((job, i) => (
+                  <JobRow key={job.fullId || i} job={job} last={i === jobs.length - 1} onNavigate={onNavigate} />
                 ))}
-              </tr>
-            </thead>
-            <tbody>
-              {MOCK_JOBS.map((job, i) => (
-                <JobRow key={job.id} job={job} last={i === MOCK_JOBS.length - 1} onNavigate={onNavigate} />
-              ))}
-            </tbody>
-          </table>
+              </tbody>
+            </table>
+          )}
         </div>
       </div>
 
@@ -160,8 +209,8 @@ function JobRow({ job, last, onNavigate }) {
       <td style={{ padding: '12px 16px', fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'oklch(0.46 0.19 145)', fontWeight: 600 }}>{job.id}</td>
       <td style={{ padding: '12px 16px' }}>
         <span style={{ fontSize: '12px', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <span>{PIPELINE_ICONS[job.type]}</span>
-          <span style={{ fontWeight: 600 }}>{PIPELINE_LABELS[job.type]}</span>
+          <span>{PIPELINE_ICONS[job.type] || '?'}</span>
+          <span style={{ fontWeight: 600 }}>{PIPELINE_LABELS[job.type] || job.type}</span>
         </span>
       </td>
       <td style={{ padding: '12px 16px', fontSize: '13px', color: 'var(--text-secondary)', maxWidth: '240px' }}>
@@ -170,7 +219,7 @@ function JobRow({ job, last, onNavigate }) {
       <td style={{ padding: '12px 16px' }}><StatusBadge status={job.status} /></td>
       <td style={{ padding: '12px 16px', fontSize: '12px', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>{job.created}</td>
       <td style={{ padding: '12px 16px' }}>
-        <button onClick={() => onNavigate(pageMap[job.type])}
+        <button onClick={() => onNavigate(pageMap[job.type] || 'jobs')}
           style={{
             background: 'transparent', border: '1px solid var(--border)',
             borderRadius: '5px', padding: '5px 10px', cursor: 'pointer',

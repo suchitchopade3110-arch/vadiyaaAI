@@ -33,7 +33,7 @@ class ImageService:
         await self.db.flush()
 
         # 4. Celery dispatch
-        from app.workers.tasks import run_image_pipeline
+        from app.workers.image_tasks import run_image_pipeline
         task = run_image_pipeline.delay(str(analysis.id))
         analysis.celery_task_id = task.id
 

@@ -1,41 +1,36 @@
 from pydantic import BaseModel, Field
+from typing import Optional, List, Dict
 from uuid import UUID
-from typing import Any
-from datetime import datetime
-from app.models.claim import ClaimStatus
-from app.core.config import settings
+from enum import Enum
+from app.schemas.common import BaseResponse, ConfidenceSignal, SourceCitation, ExtractedEntities
 
+class VerdictEnum(str, Enum):
+    VERIFIED  = "verified"
+    REFUTED   = "refuted"
+    UNCERTAIN = "uncertain"
 
-class ClaimCreateRequest(BaseModel):
-    claim_text: str = Field(..., min_length=10, max_length=5000)
-    patient_id: UUID | None = None
+class ClaimRequest(BaseModel):
+    claim_text: str = Field(..., min_length=10, max_length=5000,
+                            description="Medical claim text to verify")
+    patient_id: Optional[UUID] = None
+    priority: str = Field(default="normal", description="normal | high")
 
-    model_config = {"json_schema_extra": {
-        "example": {
-            "claim_text": "Patient has Type 2 Diabetes with HbA1c of 9.2% and hypertension.",
-            "patient_id": None,
-        }
-    }}
+class ClaimAsyncResponse(BaseResponse):
+    claim_id: UUID
+    task_id: str
+    status: str = "pending"
+    poll_url: str
+    estimated_seconds: int = 15
 
-
-class ClaimResponse(BaseModel):
-    id: UUID
-    status: ClaimStatus
+class ClaimResult(BaseResponse):
+    claim_id: UUID
     claim_text: str
-    confidence: float | None = None
-    extracted_entities: dict | None = None
-    source_citations: list | None = None
-    shap_values: dict | None = None
-    uncertainty_flag: bool
-    celery_task_id: str | None = None
-    medical_disclaimer: str = settings.MEDICAL_DISCLAIMER
-    created_at: datetime
-
-    model_config = {"from_attributes": True}
-
-
-class ClaimStatusResponse(BaseModel):
-    id: UUID
-    status: ClaimStatus
-    celery_task_id: str | None = None
-    medical_disclaimer: str = settings.MEDICAL_DISCLAIMER
+    extracted_entities: ExtractedEntities
+    verdict: VerdictEnum
+    explanation: str
+    sources: List[SourceCitation]
+    confidence: ConfidenceSignal
+    hallucination_detected: bool
+    hallucination_details: Optional[Dict] = None
+    shap_values: Optional[Dict] = None
+    processing_time_ms: Optional[float] = None

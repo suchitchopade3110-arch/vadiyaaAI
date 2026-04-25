@@ -48,10 +48,20 @@ class Settings(BaseSettings):
 
     # Safety
     CONFIDENCE_THRESHOLD: float = 0.65  # below → "Insufficient evidence"
+    MIN_CONFIDENCE_THRESHOLD: float = 0.30   # Below → "Insufficient evidence"
+    HIGH_CONFIDENCE_THRESHOLD: float = 0.80  # Above → Green
+    MIN_SOURCES_REQUIRED: int = 2            # Below → Uncertainty flag
+    
     MEDICAL_DISCLAIMER: str = (
-        "⚠️ AI-assisted analysis only. NOT a medical diagnosis. "
+        "⚠️ AI-assisted analysis only. NOT A MEDICAL DIAGNOSIS. "
         "Consult a qualified healthcare professional for clinical decisions."
     )
+
+    # Celery Task Timeouts (seconds)
+    TASK_SOFT_TIME_LIMIT: int = 120
+    TASK_HARD_TIME_LIMIT: int = 300
+    IMAGE_TASK_TIMEOUT: int = 120   # MedSAM can be slow
+    TEXT_TASK_TIMEOUT: int = 30
 
     class Config:
         env_file = ".env"

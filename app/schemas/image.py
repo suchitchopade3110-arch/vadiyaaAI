@@ -1,28 +1,49 @@
 from pydantic import BaseModel
+from typing import Optional, List, Dict
 from uuid import UUID
-from datetime import datetime
-from app.models.image_analysis import ImageType
-from app.core.config import settings
+from enum import Enum
+from app.schemas.common import BaseResponse, ConfidenceSignal, SourceCitation
 
+class AnalysisType(str, Enum):
+    XRAY      = "xray"
+    CT        = "ct"
+    MRI       = "mri"
+    SKIN      = "skin"
+    PATHOLOGY = "pathology"
 
-class ImageAnalysisResponse(BaseModel):
-    id: UUID
-    image_type: ImageType
-    confidence: float | None = None
-    classification: dict | None = None
-    roi_metadata: dict | None = None
-    segmentation_mask_path: str | None = None
-    gradcam_path: str | None = None
-    source_citations: list | None = None
-    uncertainty_flag: bool
-    celery_task_id: str | None = None
-    medical_disclaimer: str = settings.MEDICAL_DISCLAIMER
-    created_at: datetime
+class ImageAsyncResponse(BaseResponse):
+    analysis_id: UUID
+    task_id: str
+    status: str = "pending"
+    analysis_type: AnalysisType
+    poll_url: str
+    estimated_seconds: int = 45
 
-    model_config = {"from_attributes": True}
+class SegmentationResult(BaseModel):
+    mask_url: Optional[str] = None
+    overlay_url: Optional[str] = None
+    roi_bounding_box: Optional[Dict] = None
+    confidence: float
 
+class ClassificationResult(BaseModel):
+    label: str
+    probabilities: Dict[str, float]
+    top_class: str
+    top_confidence: float
 
-class ImageStatusResponse(BaseModel):
-    id: UUID
-    celery_task_id: str | None = None
-    medical_disclaimer: str = settings.MEDICAL_DISCLAIMER
+class GradCAMResult(BaseModel):
+    heatmap_url: Optional[str] = None
+    top_regions: List[Dict]
+
+class ImageResult(BaseResponse):
+    analysis_id: UUID
+    image_type: AnalysisType
+    segmentation: SegmentationResult
+    classification: ClassificationResult
+    gradcam: GradCAMResult
+    explanation: str
+    sources: List[SourceCitation]
+    confidence: ConfidenceSignal
+    anomaly_detected: bool
+    dicom_metadata: Optional[Dict] = None
+    processing_time_ms: Optional[float] = None

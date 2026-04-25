@@ -1,8 +1,10 @@
 {
 
-// claim-verifier.jsx — Claim Verifier page
+// claim-verifier.jsx — Claim Verifier page (wired to real API)
 
 const { useState, useEffect, useRef } = React;
+
+const API_BASE = '/api/v1';
 
 const CLAIM_STEPS = [
   { label: 'NLP Preprocessing',    desc: 'Tokenization, entity extraction' },
@@ -12,52 +14,6 @@ const CLAIM_STEPS = [
   { label: 'SHAP Explanation',     desc: 'Computing feature attribution values' },
   { label: 'LLM Synthesis',        desc: 'Generating final verdict & reasoning' },
 ];
-
-const MOCK_RESULT = {
-  status: 'verified',
-  confidence: 82,
-  verdict_text: 'This claim is supported by multiple high-quality randomized controlled trials. Meta-analyses consistently show aspirin antiplatelet effect reduces major adverse cardiovascular events (MACE) in secondary prevention settings.',
-  entities: [
-    { label: 'Myocardial Infarction', type: 'condition' },
-    { label: 'Aspirin 75–100mg', type: 'medication' },
-    { label: 'Risk Reduction 22–25%', type: 'lab_value' },
-    { label: 'Platelet Aggregation', type: 'finding' },
-  ],
-  shap: [
-    { factor: 'RCT evidence count', score: 0.38 },
-    { factor: 'Effect size consistency', score: 0.27 },
-    { factor: 'Population specificity', score: 0.19 },
-    { factor: 'Dose alignment', score: 0.10 },
-    { factor: 'Recency of evidence', score: 0.06 },
-  ],
-  citations: [
-    { title: 'Antithrombotic Trialists Collaboration (2009)', source: 'Lancet 373(9678):1849–1860', snippet: 'Aspirin reduced major vascular events by 22% in secondary prevention (RR 0.78, p<0.0001).' },
-    { title: 'ARRIVE Trial — Gaziano et al. (2018)', source: 'Lancet 392(10152):1036–1046', snippet: 'Primary prevention findings; notable risk/benefit variation by baseline risk.' },
-    { title: 'ACC/AHA Guideline on Primary Prevention (2019)', source: 'JACC 74(10):1376–1414', snippet: 'Class IIb recommendation for aspirin in selected high-risk patients aged 40–70.' },
-  ],
-};
-
-const MOCK_REFUTED = {
-  status: 'refuted',
-  confidence: 91,
-  verdict_text: 'This claim is not supported by peer-reviewed evidence. There is no credible clinical evidence that high-dose Vitamin C cures cancer. Cochrane reviews find no survival benefit. Some studies show potential adjunctive palliative effects but these are not curative.',
-  entities: [
-    { label: 'Cancer (malignant neoplasm)', type: 'condition' },
-    { label: 'Vitamin C (ascorbic acid)', type: 'medication' },
-    { label: 'High-dose IV infusion', type: 'finding' },
-  ],
-  shap: [
-    { factor: 'Absence of RCT evidence', score: 0.52 },
-    { factor: 'Cochrane meta-analysis', score: 0.28 },
-    { factor: 'Mechanistic plausibility', score: -0.08 },
-    { factor: 'Observational signal', score: 0.06 },
-    { factor: 'Regulatory status', score: 0.14 },
-  ],
-  citations: [
-    { title: 'Cochrane Review: Vitamin C for preventing and treating cancer (2021)', source: 'Cochrane Database Syst Rev', snippet: 'No reliable evidence that Vitamin C supplementation reduces cancer incidence or mortality.' },
-    { title: 'Padayatty et al. (2006)', source: 'CMAJ 174(7):937–942', snippet: 'Case reports of tumour regression are anecdotal; controlled trials not supportive.' },
-  ],
-};
 
 function ShapBar({ factor, score }) {
   const isPos = score >= 0;
@@ -83,14 +39,15 @@ function ClaimVerifier() {
   const [step, setStep]         = useState(0);
   const [result, setResult]     = useState(null);
   const [error, setError]       = useState('');
-  const [jobId]                 = useState('JOB-' + Math.floor(Math.random()*900+100));
+  const [jobId, setJobId]       = useState('');
   const [elapsed, setElapsed]   = useState(0);
   const timerRef = useRef(null);
+  const pollRef = useRef(null);
 
   const charCount = claim.length;
   const charValid = charCount >= 10 && charCount <= 5000;
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!charValid) { setError('Claim must be between 10 and 5000 characters.'); return; }
     setError('');
     setPhase('running');
@@ -98,26 +55,88 @@ function ClaimVerifier() {
     setResult(null);
     setElapsed(0);
     timerRef.current = setInterval(() => setElapsed(e => e + 1), 1000);
+
+    // Animate pipeline steps while waiting
     let s = 0;
-    const advance = () => {
+    const advanceStep = () => {
       s += 1;
-      setStep(s);
-      if (s < CLAIM_STEPS.length) setTimeout(advance, 900 + Math.random() * 600);
-      else {
-        clearInterval(timerRef.current);
-        setTimeout(() => {
-          const lc = claim.toLowerCase();
-          const res = (lc.includes('vitamin c') || lc.includes('cure')) ? MOCK_REFUTED : MOCK_RESULT;
-          setResult(res);
-          setPhase('done');
-        }, 400);
+      if (s < CLAIM_STEPS.length) {
+        setStep(s);
+        setTimeout(advanceStep, 1200 + Math.random() * 800);
       }
     };
-    setTimeout(advance, 900);
+    setTimeout(advanceStep, 1000);
+
+    try {
+      // Submit claim to real API
+      const body = { claim_text: claim };
+      if (patientId) body.patient_id = patientId;
+
+      const submitRes = await fetch(`${API_BASE}/verify/claim`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+
+      if (!submitRes.ok) {
+        const errData = await submitRes.json().catch(() => ({}));
+        throw new Error(errData.detail || `API returned ${submitRes.status}`);
+      }
+
+      const submitData = await submitRes.json();
+      const claimId = submitData.id;
+      setJobId(claimId.slice(0, 8));
+
+      // Poll for result
+      const poll = async () => {
+        try {
+          const pollRes = await fetch(`${API_BASE}/verify/claim/${claimId}`);
+          const data = await pollRes.json();
+          
+          if (data.status === 'PROCESSING' || data.status === 'PENDING' || data.status === 'processing' || data.status === 'pending') {
+            pollRef.current = setTimeout(poll, 2000);
+            return;
+          }
+
+          // Done — map to display format
+          clearInterval(timerRef.current);
+          setStep(CLAIM_STEPS.length);
+          
+          const analysisResult = data.analysis_result || {};
+          const status = (data.status || '').toLowerCase();
+          const displayStatus = status === 'verified' ? 'verified' : status === 'refuted' || status === 'contradicted' ? 'refuted' : 'uncertain';
+
+          setResult({
+            status: displayStatus,
+            confidence: data.confidence || analysisResult.confidence?.score || 75,
+            verdict_text: analysisResult.explanation || analysisResult.verdict || 'Analysis complete.',
+            entities: (analysisResult.entities || []).map(e => ({ label: e.label || e, type: e.type || 'finding' })),
+            shap: Object.entries(analysisResult.shap_values || {}).map(([k, v]) => ({ factor: k, score: v })).slice(0, 5),
+            citations: (data.source_citations || []).map(c => ({
+              title: c.title || c.source_id || 'Source',
+              source: c.url || c.source || '',
+              snippet: c.excerpt || c.snippet || '',
+            })),
+          });
+          setPhase('done');
+        } catch (err) {
+          console.error('Poll error:', err);
+          pollRef.current = setTimeout(poll, 3000);
+        }
+      };
+      
+      setTimeout(poll, 2000);
+
+    } catch (err) {
+      clearInterval(timerRef.current);
+      setError(err.message);
+      setPhase('idle');
+    }
   };
 
   const reset = () => {
     clearInterval(timerRef.current);
+    clearTimeout(pollRef.current);
     setPhase('idle'); setStep(0); setResult(null); setError(''); setElapsed(0);
   };
 
@@ -180,7 +199,7 @@ function ClaimVerifier() {
             </div>
             <StatusBadge status="processing" size="lg" />
             <div style={{ marginTop: '16px', fontSize: '12px', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
-              {jobId} · {CLAIM_STEPS[Math.min(step, CLAIM_STEPS.length-1)].label}
+              {jobId || '...'} · {CLAIM_STEPS[Math.min(step, CLAIM_STEPS.length-1)].label}
             </div>
             <div style={{ marginTop: '20px', padding: '14px', background: 'var(--bg-elevated)', borderRadius: '7px', border: '1px solid var(--border)' }}>
               <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '6px' }}>Claim submitted:</div>
@@ -206,30 +225,27 @@ function ClaimVerifier() {
           </Card>
 
           <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
-            <Card style={{ flex: 1, minWidth: '260px' }}>
-              <SectionLabel>Extracted Entities</SectionLabel>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                {result.entities.map((e, i) => <EntityChip key={i} label={e.label} type={e.type} />)}
-              </div>
-              <div style={{ marginTop: '14px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                {['condition','medication','lab_value','finding'].map(t => {
-                  const colors = { condition:'oklch(0.46 0.19 145)', medication:'oklch(0.46 0.19 145)', lab_value:'oklch(0.75 0.14 60)', finding:'oklch(0.72 0.13 300)' };
-                  return <span key={t} style={{ fontSize: '10px', color: colors[t], display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: colors[t], display: 'inline-block' }} />
-                    {t.replace('_',' ')}
-                  </span>;
-                })}
-              </div>
-            </Card>
-            <Card style={{ flex: 1, minWidth: '260px' }}>
-              <SectionLabel>SHAP Feature Attribution</SectionLabel>
-              {result.shap.map((s, i) => <ShapBar key={i} factor={s.factor} score={s.score} />)}
-            </Card>
+            {result.entities.length > 0 && (
+              <Card style={{ flex: 1, minWidth: '260px' }}>
+                <SectionLabel>Extracted Entities</SectionLabel>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                  {result.entities.map((e, i) => <EntityChip key={i} label={e.label} type={e.type} />)}
+                </div>
+              </Card>
+            )}
+            {result.shap.length > 0 && (
+              <Card style={{ flex: 1, minWidth: '260px' }}>
+                <SectionLabel>SHAP Feature Attribution</SectionLabel>
+                {result.shap.map((s, i) => <ShapBar key={i} factor={s.factor} score={s.score} />)}
+              </Card>
+            )}
           </div>
 
-          <Card>
-            <CitationList citations={result.citations} />
-          </Card>
+          {result.citations.length > 0 && (
+            <Card>
+              <CitationList citations={result.citations} />
+            </Card>
+          )}
 
           {result.status === 'uncertain' && (
             <UncertaintyBanner message="Confidence below threshold. Results should be interpreted with clinical judgment." />

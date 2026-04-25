@@ -160,23 +160,64 @@ function ImageAnalysis() {
     setFileError(''); setFile(f);
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!file) { setFileError('Please upload an image file.'); return; }
     setPhase('running'); setStep(0); setResult(null); setElapsed(0);
     timerRef.current = setInterval(() => setElapsed(e => e + 1), 1000);
+
     let s = 0;
     const advance = () => {
       s++; setStep(s);
       if (s < IMAGE_STEPS.length) setTimeout(advance, 1100 + Math.random() * 700);
-      else {
-        clearInterval(timerRef.current);
-        setTimeout(() => {
-          setResult(analysisType === 'mri' ? MOCK_MRI_RESULT : MOCK_XRAY_RESULT);
-          setPhase('done');
-        }, 500);
-      }
     };
     setTimeout(advance, 1000);
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      if (patientId) formData.append('patient_id', patientId);
+
+      const submitRes = await fetch(`${API_BASE || '/api/v1'}/analyze/image/${analysisType}`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!submitRes.ok) {
+        const errData = await submitRes.json().catch(() => ({}));
+        throw new Error(errData.detail || `API returned ${submitRes.status}`);
+      }
+
+      const submitData = await submitRes.json();
+      const analysisId = submitData.id;
+
+      // Poll for result
+      const poll = async () => {
+        try {
+          const pollRes = await fetch(`${API_BASE || '/api/v1'}/analyze/image/${analysisId}`);
+          const data = await pollRes.json();
+          
+          if (data.status === 'PROCESSING' || data.status === 'PENDING' || data.status === 'processing' || data.status === 'pending') {
+            setTimeout(poll, 2000);
+            return;
+          }
+
+          // Done — map to display format
+          clearInterval(timerRef.current);
+          setStep(IMAGE_STEPS.length);
+          setResult(data);
+          setPhase('done');
+        } catch (err) {
+          console.error('Poll error:', err);
+          setTimeout(poll, 3000);
+        }
+      };
+      
+      setTimeout(poll, 2000);
+    } catch (err) {
+      clearInterval(timerRef.current);
+      setFileError(err.message);
+      setPhase('idle');
+    }
   };
 
   const reset = () => {
