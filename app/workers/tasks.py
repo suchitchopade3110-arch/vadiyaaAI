@@ -51,7 +51,7 @@ class VaidyaTask(Task):
 )
 def run_claim_pipeline(self, claim_id: str):
     from app.models.claim import Claim, ClaimStatus
-    from app.rag.reasoner import run_rag_pipeline
+    from app.services.rag_pipeline import verify_claim
 
     db = get_sync_db()
     try:
@@ -75,15 +75,12 @@ def run_claim_pipeline(self, claim_id: str):
         #   STEP 3: XGBoost predict          → confidence from reasoning output
         #   STEP 4: Llama reasoning + verify → run_rag_pipeline reasoning step
         #   STEP 5: Hallucination check      → uncertainty signal inside pipeline
-        rag_result = run_rag_pipeline(
-            claim=claim.claim_text,
-            top_k=5
-        )
-
-        final     = rag_result.get("final_output", {})
+        result = verify_claim(claim=claim.claim_text, top_k=5, prompt_version="v2")
+        rag_result = result.get("raw", {})
+        final = rag_result.get("final_output", {})
         retrieval = rag_result.get("retrieval", {})
-        draft     = rag_result.get("draft_reasoning") or {}
-        uncert    = rag_result.get("uncertainty", {})
+        draft = rag_result.get("draft_reasoning") or {}
+        uncert = rag_result.get("uncertainty", {})
 
         # ── Map verdict → ClaimStatus ─────────────────────────────────────────
         verdict_map = {
@@ -96,7 +93,7 @@ def run_claim_pipeline(self, claim_id: str):
         verdict     = verdict_map.get(verdict_str, ClaimStatus.UNCERTAIN)
 
         # ── Confidence 0–100 (Platt-scaled from RAG confidence float) ─────────
-        raw_conf   = float(draft.get("confidence", 0.0))
+        raw_conf = float(result.get("confidence", 0.0))
         confidence = round(raw_conf * 100, 1)
 
         # ── Uncertainty flag ──────────────────────────────────────────────────
@@ -113,7 +110,7 @@ def run_claim_pipeline(self, claim_id: str):
             "rag_status":  rag_result.get("status", "unknown"),
         }
 
-        claim.source_citations = final.get("citations", [])
+        claim.source_citations = result.get("citations", [])
 
         claim.shap_values = {
             "confidence_note":     final.get("confidence_note", ""),
@@ -128,17 +125,14 @@ def run_claim_pipeline(self, claim_id: str):
         claim.uncertainty_flag = uncertainty_flag
 
         # Attach mandatory disclaimer (PRD §9)
-        claim.disclaimer = rag_result.get(
-            "disclaimer",
-            "AI-assisted analysis. NOT a medical diagnosis."
-        )
+        claim.disclaimer = result.get("disclaimer")
 
         db.commit()
         log.info(
             f"[claim:{claim_id}] DONE "
             f"verdict={verdict_str} confidence={confidence} "
             f"uncertain={uncertainty_flag} "
-            f"citations={len(final.get('citations', []))}"
+            f"citations={len(result.get('citations', []))}"
         )
 
         return {
@@ -146,7 +140,7 @@ def run_claim_pipeline(self, claim_id: str):
             "verdict":         verdict_str,
             "confidence":      confidence,
             "uncertainty_flag": uncertainty_flag,
-            "citation_count":  len(final.get("citations", [])),
+            "citation_count":  len(result.get("citations", [])),
             "disclaimer":      claim.disclaimer,
         }
 

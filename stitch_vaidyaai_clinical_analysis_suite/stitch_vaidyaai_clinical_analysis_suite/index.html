@@ -1,689 +1,568 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>VaidyaAI — Medical Intelligence Platform</title>
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>VAIDYAA AI — Medical Intelligence Platform</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,700&family=DM+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+
 <style>
-*{box-sizing:border-box;margin:0;padding:0}
-:root{
-  --bg:#F7F8FA;
-  --surface:#FFFFFF;
-  --border:#E8EBF0;
-  --border-strong:#D1D9E0;
-  --text-primary:#0F1923;
-  --text-secondary:#4A5568;
-  --text-tertiary:#9AA5B4;
-  --accent:#0EA271;
-  --accent-light:#E8F8F2;
-  --accent-mid:#C6EFE1;
-  --danger:#E53E3E;
-  --danger-light:#FFF5F5;
-  --warning:#D97706;
-  --warning-light:#FFFBEB;
-  --blue:#2B6CB0;
-  --blue-light:#EBF4FF;
-  --shadow-sm:0 1px 3px rgba(15,25,35,0.06),0 1px 2px rgba(15,25,35,0.04);
-  --shadow-md:0 4px 12px rgba(15,25,35,0.08),0 2px 4px rgba(15,25,35,0.04);
-  --radius:10px;
-  --radius-sm:6px;
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --white:    #ffffff;
+  --off:      #f5faf6;
+  --green-dark:  oklch(0.32 0.18 145);
+  --green-mid:   oklch(0.46 0.19 145);
+  --green-vivid: oklch(0.60 0.20 145);
+  --green-light: oklch(0.88 0.08 145);
+  --green-pale:  oklch(0.96 0.04 145);
+  --ink:      oklch(0.18 0.02 145);
+  --ink-2:    oklch(0.38 0.02 145);
+  --ink-3:    oklch(0.60 0.01 145);
+  --border:   oklch(0.87 0.015 145);
+  --font-display: 'Playfair Display', serif;
+  --font-body:    'DM Sans', sans-serif;
+  --font-mono:    'JetBrains Mono', monospace;
 }
-body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text-primary);height:100vh;display:flex;overflow:hidden;font-size:14px}
 
-/* SIDEBAR */
-.sidebar{width:220px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;box-shadow:var(--shadow-sm)}
-.logo{padding:1.25rem 1.25rem 1rem;border-bottom:1px solid var(--border)}
-.logo-mark{display:flex;align-items:center;gap:8px;margin-bottom:3px}
-.logo-icon{width:28px;height:28px;background:var(--accent);border-radius:7px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px;font-weight:600;letter-spacing:-0.02em}
-.logo-name{font-size:15px;font-weight:600;color:var(--text-primary);letter-spacing:-0.02em}
-.logo-sub{font-size:11px;color:var(--text-tertiary);padding-left:36px}
-.nav{padding:0.75rem 0.625rem;flex:1;display:flex;flex-direction:column;gap:2px}
-.nav-item{padding:8px 10px;font-size:13px;color:var(--text-secondary);cursor:pointer;display:flex;align-items:center;gap:9px;border-radius:var(--radius-sm);transition:all 0.1s;font-weight:400}
-.nav-item:hover{color:var(--text-primary);background:var(--bg)}
-.nav-item.active{color:var(--accent);background:var(--accent-light);font-weight:500}
-.nav-icon{font-size:15px;width:18px;text-align:center;opacity:0.7}
-.nav-item.active .nav-icon{opacity:1}
-.nav-section{font-size:10px;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:0.08em;padding:12px 10px 4px;font-weight:500}
-.sidebar-footer{padding:0.875rem 1.25rem;border-top:1px solid var(--border);background:var(--bg)}
-.phase-pill{font-size:10px;color:var(--accent);background:var(--accent-light);border:1px solid var(--accent-mid);padding:3px 8px;border-radius:20px;display:inline-flex;align-items:center;gap:4px;font-weight:500}
-.phase-dot{width:5px;height:5px;border-radius:50%;background:var(--accent)}
+html { scroll-behavior: smooth; }
+body { font-family: var(--font-body); background: var(--white); color: var(--ink); overflow-x: hidden; }
 
-/* MAIN */
-.main{flex:1;display:flex;flex-direction:column;overflow:hidden}
-.topbar{padding:0.875rem 1.5rem;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:var(--surface);flex-shrink:0}
-.page-title{font-size:15px;font-weight:600;color:var(--text-primary);letter-spacing:-0.01em}
-.topbar-right{display:flex;align-items:center;gap:12px}
-.status-chip{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-secondary);background:var(--bg);border:1px solid var(--border);padding:4px 10px;border-radius:20px}
-.status-dot{width:6px;height:6px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 2px var(--accent-light)}
-.content{flex:1;overflow-y:auto;padding:1.5rem;display:flex;flex-direction:column;gap:1.25rem}
+/* ── Reveal animation ─────────────────────────────────── */
+.reveal { opacity: 0; transform: translateY(28px); transition: opacity 0.7s ease, transform 0.7s ease; }
+.reveal.visible { opacity: 1; transform: translateY(0); }
+.reveal-delay-1 { transition-delay: 0.1s; }
+.reveal-delay-2 { transition-delay: 0.2s; }
+.reveal-delay-3 { transition-delay: 0.3s; }
+.reveal-delay-4 { transition-delay: 0.4s; }
 
-/* VIEWS */
-.view{display:none;flex-direction:column;gap:1.25rem}
-.view.active{display:flex}
+/* ── Navbar ───────────────────────────────────────────── */
+nav {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 48px; height: 64px;
+  background: rgba(255,255,255,0.88); backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--border);
+  transition: box-shadow 0.3s;
+}
+nav.scrolled { box-shadow: 0 2px 24px oklch(0.46 0.19 145 / 0.10); }
+.nav-logo { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+.nav-logo-mark {
+  width: 34px; height: 34px; border-radius: 9px;
+  background: var(--green-mid); display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-display); font-weight: 900; font-size: 18px; color: #fff; letter-spacing: -0.03em;
+}
+.nav-logo-text { font-size: 16px; font-weight: 700; color: var(--ink); letter-spacing: -0.02em; }
+.nav-logo-text span { color: var(--green-mid); }
+.nav-links { display: flex; align-items: center; gap: 32px; }
+.nav-links a { font-size: 14px; font-weight: 500; color: var(--ink-2); text-decoration: none; transition: color 0.2s; }
+.nav-links a:hover { color: var(--green-mid); }
+.nav-cta {
+  padding: 10px 22px; background: var(--green-mid); color: #fff;
+  border-radius: 8px; font-size: 14px; font-weight: 600; text-decoration: none;
+  transition: background 0.2s, transform 0.15s;
+}
+.nav-cta:hover { background: var(--green-dark); transform: translateY(-1px); }
 
-/* METRICS */
-.metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
-.metric{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1.125rem 1.25rem;box-shadow:var(--shadow-sm)}
-.metric-label{font-size:11px;color:var(--text-tertiary);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.06em;font-weight:500}
-.metric-value{font-size:28px;font-weight:600;color:var(--text-primary);line-height:1;letter-spacing:-0.02em}
-.metric-change{font-size:11px;margin-top:6px;font-weight:500}
+/* ── Hero ─────────────────────────────────────────────── */
+.hero {
+  min-height: 100vh; padding: 120px 48px 80px;
+  display: flex; align-items: center; gap: 48px;
+  position: relative; overflow: hidden;
+  background: var(--white);
+}
+.hero-bg-blob {
+  position: absolute; border-radius: 50%; filter: blur(80px); pointer-events: none; z-index: 0;
+}
+.blob-1 { width: 600px; height: 600px; top: -100px; right: -150px; background: oklch(0.88 0.08 145 / 0.6); }
+.blob-2 { width: 400px; height: 400px; bottom: -80px; left: -80px;  background: oklch(0.92 0.05 145 / 0.5); }
+.blob-3 { width: 200px; height: 200px; top: 200px; right: 400px; background: oklch(0.80 0.10 145 / 0.3); }
 
-/* CARDS */
-.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1.125rem 1.25rem;box-shadow:var(--shadow-sm)}
-.card-title{font-size:11px;font-weight:600;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:1rem}
-.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.hero-left { flex: 1; max-width: 580px; position: relative; z-index: 1; }
+.hero-eyebrow {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 6px 14px; background: var(--green-pale); border: 1px solid var(--green-light);
+  border-radius: 20px; font-size: 12px; font-weight: 700; color: var(--green-mid);
+  text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 24px;
+}
+.hero-eyebrow::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--green-vivid); display: inline-block; animation: pulse-g 2s ease infinite; }
+@keyframes pulse-g { 0%,100%{box-shadow:0 0 0 0 oklch(0.60 0.20 145 / 0.5)} 50%{box-shadow:0 0 0 6px oklch(0.60 0.20 145 / 0)} }
 
-/* UPLOAD */
-.upload-zone{border:1.5px dashed var(--border-strong);border-radius:var(--radius);padding:2.5rem 1rem;text-align:center;cursor:pointer;transition:all 0.15s;background:var(--bg)}
-.upload-zone:hover{border-color:var(--accent);background:var(--accent-light)}
-.upload-icon-wrap{width:44px;height:44px;background:var(--accent-light);border-radius:10px;display:flex;align-items:center;justify-content:center;margin:0 auto 0.875rem;font-size:18px}
-.upload-title{font-size:14px;font-weight:500;color:var(--text-primary);margin-bottom:4px}
-.upload-sub{font-size:12px;color:var(--text-tertiary);margin-bottom:1rem}
+.hero-headline {
+  font-family: var(--font-display); font-size: clamp(42px, 5.5vw, 72px);
+  font-weight: 900; line-height: 1.05; color: var(--ink); letter-spacing: -0.03em;
+  margin-bottom: 24px;
+}
+.hero-headline em { color: var(--green-mid); font-style: normal; }
+.hero-sub {
+  font-size: 18px; line-height: 1.7; color: var(--ink-2); max-width: 480px; margin-bottom: 36px; font-weight: 400;
+}
+.hero-actions { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+.btn-primary {
+  padding: 14px 28px; background: var(--green-mid); color: #fff;
+  border-radius: 10px; font-size: 15px; font-weight: 700; text-decoration: none;
+  transition: all 0.2s; border: none; cursor: pointer;
+  box-shadow: 0 4px 20px oklch(0.46 0.19 145 / 0.35);
+}
+.btn-primary:hover { background: var(--green-dark); transform: translateY(-2px); box-shadow: 0 8px 28px oklch(0.46 0.19 145 / 0.4); }
+.btn-ghost {
+  padding: 14px 28px; background: transparent; color: var(--ink);
+  border-radius: 10px; font-size: 15px; font-weight: 600; text-decoration: none;
+  border: 1.5px solid var(--border); transition: all 0.2s; cursor: pointer;
+}
+.btn-ghost:hover { border-color: var(--green-mid); color: var(--green-mid); background: var(--green-pale); }
 
-/* BUTTONS */
-.btn{padding:7px 16px;font-size:12px;border-radius:var(--radius-sm);cursor:pointer;font-family:'DM Sans',sans-serif;transition:all 0.1s;font-weight:500}
-.btn-primary{background:var(--accent);color:#fff;border:none;box-shadow:0 1px 3px rgba(14,162,113,0.3)}
-.btn-primary:hover{background:#0B8F64}
-.btn-outline{background:var(--surface);color:var(--text-secondary);border:1px solid var(--border)}
-.btn-outline:hover{border-color:var(--border-strong);color:var(--text-primary)}
-.btn-row{display:flex;gap:8px;margin-top:1rem}
+.hero-right { flex: 1; position: relative; z-index: 1; display: flex; justify-content: center; }
 
-/* PIPELINE STEPS */
-.step-list{display:flex;flex-direction:column;gap:10px}
-.step{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--text-tertiary)}
-.step.done{color:var(--text-secondary)}
-.step.active{color:var(--text-primary);font-weight:500}
-.step-icon{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;flex-shrink:0;font-weight:600}
-.step.done .step-icon{background:var(--accent-light);color:var(--accent)}
-.step.active .step-icon{background:var(--blue-light);color:var(--blue);border:1.5px solid rgba(43,108,176,0.2)}
-.step.pending .step-icon{background:var(--bg);color:var(--text-tertiary);border:1px solid var(--border)}
-@keyframes spin{to{transform:rotate(360deg)}}
-.spin{animation:spin 0.8s linear infinite}
+/* ── Mock UI Card ─────────────────────────────────────── */
+.mock-card {
+  width: 100%; max-width: 480px;
+  background: var(--white); border: 1px solid var(--border);
+  border-radius: 16px; overflow: hidden;
+  box-shadow: 0 24px 80px oklch(0.46 0.19 145 / 0.18), 0 4px 16px rgba(0,0,0,0.06);
+  transform: perspective(1000px) rotateY(-4deg) rotateX(2deg);
+  animation: float 5s ease-in-out infinite;
+}
+@keyframes float { 0%,100%{transform:perspective(1000px) rotateY(-4deg) rotateX(2deg) translateY(0)} 50%{transform:perspective(1000px) rotateY(-4deg) rotateX(2deg) translateY(-10px)} }
 
-/* RISK */
-.risk-ring{display:flex;align-items:center;gap:1.25rem}
-.ring-wrap{position:relative;width:80px;height:80px;flex-shrink:0}
-.ring-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
-.ring-num{font-size:22px;font-weight:600;color:var(--text-primary);line-height:1;letter-spacing:-0.02em}
-.ring-denom{font-size:10px;color:var(--text-tertiary)}
-.verdict-pill{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:500;padding:4px 10px;border-radius:20px;margin-bottom:6px}
-.verdict-high{background:var(--danger-light);color:var(--danger)}
-.verdict-dot{width:5px;height:5px;border-radius:50%;background:currentColor}
+.mock-topbar {
+  background: var(--green-dark); padding: 12px 16px;
+  display: flex; align-items: center; gap: 10px;
+}
+.mock-topbar-dot { width: 9px; height: 9px; border-radius: 50%; }
+.mock-body { padding: 20px; display: flex; flex-direction: column; gap: 14px; }
+.mock-label { font-size: 10px; font-weight: 700; color: var(--ink-3); text-transform: uppercase; letter-spacing: 0.08em; }
+.mock-claim-box {
+  background: var(--off); border: 1px solid var(--border); border-radius: 8px;
+  padding: 12px; font-size: 13px; color: var(--ink-2); line-height: 1.6;
+  font-style: italic;
+}
+.mock-stepper { display: flex; flex-direction: column; gap: 6px; }
+.mock-step { display: flex; align-items: center; gap: 10px; font-size: 12px; }
+.mock-step-dot { width: 18px; height: 18px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; flex-shrink: 0; }
+.mock-verdict {
+  background: oklch(0.46 0.19 145 / 0.08); border: 1px solid oklch(0.46 0.19 145 / 0.3);
+  border-radius: 10px; padding: 14px;
+}
+.mock-verdict-label { font-size: 10px; font-weight: 700; color: var(--green-mid); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 8px; }
+.mock-verdict-text { font-size: 12px; color: var(--ink-2); line-height: 1.6; }
+.mock-confidence { margin-top: 10px; }
+.mock-conf-bar { height: 6px; background: var(--green-light); border-radius: 3px; overflow: hidden; margin-top: 4px; }
+.mock-conf-fill { height: 100%; width: 82%; background: var(--green-mid); border-radius: 3px; animation: grow-bar 2s ease forwards; }
+@keyframes grow-bar { from{width:0} to{width:82%} }
 
-/* SHAP */
-.shap-row{display:flex;align-items:center;gap:8px;margin-bottom:8px}
-.shap-name{font-size:12px;color:var(--text-secondary);width:100px;flex-shrink:0;font-family:'DM Mono',monospace;font-size:11px}
-.shap-track{flex:1;height:4px;background:var(--bg);border-radius:2px;overflow:hidden;border:1px solid var(--border)}
-.shap-fill{height:100%;border-radius:2px}
-.shap-val{font-size:11px;color:var(--text-tertiary);width:36px;text-align:right;flex-shrink:0;font-family:'DM Mono',monospace}
+/* ── Stats strip ──────────────────────────────────────── */
+.stats-strip {
+  background: var(--green-dark); padding: 40px 48px;
+  display: flex; justify-content: space-around; align-items: center; flex-wrap: wrap; gap: 24px;
+}
+.stat-item { text-align: center; }
+.stat-num { font-family: var(--font-display); font-size: 40px; font-weight: 900; color: #fff; letter-spacing: -0.03em; }
+.stat-num span { color: var(--green-light); }
+.stat-label { font-size: 13px; color: oklch(0.75 0.05 145); font-weight: 500; margin-top: 4px; }
+.stat-divider { width: 1px; height: 48px; background: oklch(1 0 0 / 0.12); }
 
-/* LAB VALUES */
-.lab-row{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border);font-size:12px}
-.lab-row:last-child{border-bottom:none}
-.lab-name{color:var(--text-secondary)}
-.lab-val{font-weight:500;font-family:'DM Mono',monospace;font-size:11px}
-.val-high{color:var(--danger)}
-.val-low{color:var(--blue)}
-.val-ok{color:var(--accent)}
+/* ── Section wrapper ──────────────────────────────────── */
+.section { padding: 100px 48px; }
+.section-eyebrow {
+  font-size: 12px; font-weight: 700; color: var(--green-mid); text-transform: uppercase;
+  letter-spacing: 0.1em; margin-bottom: 14px;
+}
+.section-title {
+  font-family: var(--font-display); font-size: clamp(32px, 4vw, 52px);
+  font-weight: 900; color: var(--ink); letter-spacing: -0.03em; line-height: 1.08;
+  max-width: 640px; margin-bottom: 16px;
+}
+.section-title em { color: var(--green-mid); font-style: normal; }
+.section-sub { font-size: 16px; color: var(--ink-2); max-width: 540px; line-height: 1.7; margin-bottom: 56px; }
 
-/* ENTITY TAGS */
-.tags{display:flex;flex-wrap:wrap;gap:5px}
-.tag{font-size:11px;padding:3px 8px;border-radius:4px;border:1px solid;font-weight:500}
-.tag-condition{background:var(--blue-light);color:var(--blue);border-color:rgba(43,108,176,0.2)}
-.tag-medication{background:var(--accent-light);color:var(--accent);border-color:var(--accent-mid)}
-.tag-label{font-size:10px;color:var(--text-tertiary);margin-bottom:5px;text-transform:uppercase;letter-spacing:0.06em;font-weight:600}
+/* ── Features grid ────────────────────────────────────── */
+.features-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; }
+.feature-card {
+  background: var(--white); border: 1.5px solid var(--border);
+  border-radius: 14px; padding: 28px; cursor: default;
+  transition: all 0.25s; position: relative; overflow: hidden;
+}
+.feature-card::before {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(135deg, var(--green-pale), transparent 60%);
+  opacity: 0; transition: opacity 0.3s;
+}
+.feature-card:hover { border-color: var(--green-light); transform: translateY(-4px); box-shadow: 0 16px 48px oklch(0.46 0.19 145 / 0.12); }
+.feature-card:hover::before { opacity: 1; }
+.feature-icon {
+  width: 48px; height: 48px; border-radius: 12px;
+  background: var(--green-pale); border: 1px solid var(--green-light);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 22px; margin-bottom: 18px; position: relative; z-index: 1;
+}
+.feature-title { font-size: 18px; font-weight: 700; color: var(--ink); margin-bottom: 10px; position: relative; z-index: 1; }
+.feature-desc { font-size: 14px; color: var(--ink-2); line-height: 1.7; margin-bottom: 16px; position: relative; z-index: 1; }
+.feature-tags { display: flex; flex-wrap: wrap; gap: 6px; position: relative; z-index: 1; }
+.feature-tag {
+  font-size: 11px; font-weight: 600; color: var(--green-mid);
+  background: var(--green-pale); border: 1px solid var(--green-light);
+  padding: 3px 9px; border-radius: 20px; font-family: var(--font-mono);
+}
 
-/* DISCLAIMER */
-.disclaimer{background:var(--warning-light);border:1px solid rgba(217,119,6,0.2);border-radius:var(--radius-sm);padding:10px 14px;font-size:11px;color:var(--warning);display:flex;gap:8px;align-items:flex-start;font-weight:500}
+/* ── How it works ─────────────────────────────────────── */
+.how-section { background: var(--off); }
+.pipeline-flow {
+  display: flex; align-items: flex-start; gap: 0; flex-wrap: nowrap; overflow-x: auto;
+  padding-bottom: 8px;
+}
+.pipeline-step { flex: 1; min-width: 160px; text-align: center; position: relative; }
+.pipeline-step::after {
+  content: '→'; position: absolute; right: -12px; top: 28px;
+  font-size: 20px; color: var(--green-light); z-index: 1;
+}
+.pipeline-step:last-child::after { display: none; }
+.pipeline-num {
+  width: 56px; height: 56px; border-radius: 50%;
+  background: var(--white); border: 2px solid var(--green-mid);
+  display: flex; align-items: center; justify-content: center;
+  margin: 0 auto 14px; font-family: var(--font-display);
+  font-size: 22px; font-weight: 900; color: var(--green-mid);
+  box-shadow: 0 4px 16px oklch(0.46 0.19 145 / 0.15);
+}
+.pipeline-step-title { font-size: 13px; font-weight: 700; color: var(--ink); margin-bottom: 6px; }
+.pipeline-step-desc { font-size: 12px; color: var(--ink-3); line-height: 1.5; padding: 0 8px; }
 
-/* CLAIM TEXTAREA */
-.claim-textarea{width:100%;min-height:90px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px;font-size:13px;color:var(--text-primary);resize:vertical;font-family:'DM Sans',sans-serif;outline:none;transition:border-color 0.15s}
-.claim-textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-light)}
-.claim-textarea::placeholder{color:var(--text-tertiary)}
+/* ── Trust section ────────────────────────────────────── */
+.trust-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
+.trust-card {
+  padding: 24px; border-radius: 12px; background: var(--white);
+  border: 1px solid var(--border); display: flex; gap: 14px; align-items: flex-start;
+}
+.trust-icon { font-size: 22px; flex-shrink: 0; margin-top: 2px; }
+.trust-title { font-size: 14px; font-weight: 700; color: var(--ink); margin-bottom: 5px; }
+.trust-desc { font-size: 13px; color: var(--ink-2); line-height: 1.6; }
 
-/* ACTIVITY */
-.activity-row{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);font-size:12px}
-.activity-row:last-child{border-bottom:none}
-.activity-avatar{width:30px;height:30px;border-radius:50%;background:var(--bg);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--text-tertiary);flex-shrink:0;font-weight:600}
-.activity-name{color:var(--text-primary);font-weight:500;margin-bottom:1px}
-.activity-meta{color:var(--text-tertiary)}
-.activity-badge{font-size:10px;padding:2px 7px;border-radius:4px;font-weight:500}
+/* ── CTA section ──────────────────────────────────────── */
+.cta-section {
+  background: var(--green-dark); padding: 100px 48px; text-align: center;
+  position: relative; overflow: hidden;
+}
+.cta-bg-circle {
+  position: absolute; border-radius: 50%; pointer-events: none;
+  background: oklch(0.46 0.19 145 / 0.3);
+}
+.cta-circle-1 { width: 500px; height: 500px; top: -200px; left: -100px; }
+.cta-circle-2 { width: 400px; height: 400px; bottom: -150px; right: -80px; }
+.cta-eyebrow { font-size: 12px; font-weight: 700; color: var(--green-light); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 20px; }
+.cta-headline {
+  font-family: var(--font-display); font-size: clamp(36px, 5vw, 64px);
+  font-weight: 900; color: #fff; letter-spacing: -0.03em; line-height: 1.08;
+  margin-bottom: 20px; position: relative; z-index: 1;
+}
+.cta-sub { font-size: 17px; color: oklch(0.82 0.06 145); max-width: 500px; margin: 0 auto 40px; line-height: 1.6; position: relative; z-index: 1; }
+.btn-white {
+  padding: 15px 32px; background: #fff; color: var(--green-dark);
+  border-radius: 10px; font-size: 15px; font-weight: 700; text-decoration: none;
+  display: inline-block; transition: all 0.2s; position: relative; z-index: 1;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+}
+.btn-white:hover { transform: translateY(-2px); box-shadow: 0 8px 32px rgba(0,0,0,0.2); }
 
-/* FILE CHIP */
-.file-chip{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm)}
-.file-icon{width:32px;height:32px;background:var(--accent-light);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--accent);font-weight:700;flex-shrink:0;border:1px solid var(--accent-mid)}
+/* ── Disclaimer strip ─────────────────────────────────── */
+.disclaimer-strip {
+  background: oklch(0.75 0.14 60 / 0.08); border-top: 1px solid oklch(0.75 0.14 60 / 0.25); border-bottom: 1px solid oklch(0.75 0.14 60 / 0.25);
+  padding: 14px 48px; display: flex; align-items: center; gap: 12px;
+}
+.disclaimer-strip p { font-size: 12px; color: oklch(0.48 0.10 60); line-height: 1.6; }
 
-/* QUICK CARDS */
-.quick-card{border:1px solid var(--border);border-radius:var(--radius);padding:1.125rem;background:var(--surface);cursor:pointer;transition:all 0.15s;box-shadow:var(--shadow-sm)}
-.quick-card:hover{border-color:var(--accent);box-shadow:var(--shadow-md)}
-.quick-title{font-size:13px;font-weight:600;color:var(--text-primary);margin-bottom:4px;letter-spacing:-0.01em}
-.quick-sub{font-size:11px;color:var(--text-tertiary);margin-bottom:0.875rem;line-height:1.5}
+/* ── Footer ───────────────────────────────────────────── */
+footer {
+  background: var(--ink); padding: 48px;
+  display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 20px;
+}
+.footer-logo { display: flex; align-items: center; gap: 10px; }
+.footer-logo-mark { width: 30px; height: 30px; background: var(--green-mid); border-radius: 7px; display: flex; align-items: center; justify-content: center; font-family: var(--font-display); font-weight: 900; font-size: 16px; color: #fff; }
+.footer-logo-name { font-size: 15px; font-weight: 700; color: #fff; }
+.footer-links { display: flex; gap: 28px; }
+.footer-links a { font-size: 13px; color: oklch(0.65 0.02 145); text-decoration: none; transition: color 0.2s; }
+.footer-links a:hover { color: var(--green-light); }
+.footer-copy { font-size: 12px; color: oklch(0.45 0.01 145); }
 
-/* EVIDENCE */
-.evidence-item{padding:8px 10px;background:var(--bg);border-radius:var(--radius-sm);font-size:12px;color:var(--text-secondary);display:flex;gap:8px;border:1px solid var(--border)}
-.evidence-num{width:18px;height:18px;background:var(--accent-light);color:var(--accent);border-radius:4px;font-size:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-weight:700}
-
-/* PHASE 2 */
-.phase2-card{text-align:center;padding:3rem 1rem}
-.phase2-badge{display:inline-flex;align-items:center;gap:6px;font-size:11px;padding:5px 12px;border-radius:20px;background:var(--warning-light);color:var(--warning);border:1px solid rgba(217,119,6,0.2);font-weight:500}
-
-/* DIVIDER */
-.section-divider{height:1px;background:var(--border);margin:4px 0}
-
-/* SCROLLBAR */
-.content::-webkit-scrollbar{width:4px}
-.content::-webkit-scrollbar-track{background:transparent}
-.content::-webkit-scrollbar-thumb{background:var(--border-strong);border-radius:2px}
-
-/* VERDICT COLORS */
-.verdict-verified{color:#0B8F64;font-size:28px;font-weight:700;letter-spacing:-0.02em}
-.verdict-uncertain{color:var(--warning);font-size:28px;font-weight:700}
-.verdict-refuted{color:var(--danger);font-size:28px;font-weight:700}
-
-/* LOADING */
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
-.loading-text{animation:pulse 1.5s ease infinite;color:var(--text-tertiary);font-size:12px}
+/* ── Scrollbar ────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--green-light); border-radius: 3px; }
 </style>
 </head>
 <body>
 
-<div class="sidebar">
-  <div class="logo">
-    <div class="logo-mark">
-      <div class="logo-icon">V</div>
-      <div class="logo-name">VaidyaAI</div>
-    </div>
-    <div class="logo-sub">Medical Intelligence</div>
+<!-- Navbar -->
+<nav id="navbar">
+  <a href="#" class="nav-logo">
+    <img src="uploads/WhatsApp Image 2026-04-25 at 9.02.05 AM.jpeg" alt="VAIDYAA AI" style="height:38px;width:38px;object-fit:cover;border-radius:9px;" />
+    <span class="nav-logo-text">VAIDYAA <span>AI</span></span>
+  </a>
+  <div class="nav-links">
+    <a href="#features">Features</a>
+    <a href="#how">How it Works</a>
+    <a href="#trust">Trust & Safety</a>
   </div>
-  <nav class="nav">
-    <div class="nav-section">Workspace</div>
-    <div class="nav-item active" onclick="nav(this,'dash')"><span class="nav-icon">◈</span>Dashboard</div>
-    <div class="nav-item" onclick="nav(this,'report')"><span class="nav-icon">◎</span>Report Analyzer</div>
-    <div class="nav-item" onclick="nav(this,'claim')"><span class="nav-icon">◇</span>Claim Verifier</div>
-    <div class="nav-section">Phase 2</div>
-    <div class="nav-item" onclick="nav(this,'image')" style="opacity:0.5"><span class="nav-icon">▣</span>Image Analysis</div>
-  </nav>
-  <div class="sidebar-footer">
-    <div class="phase-pill"><span class="phase-dot"></span>Phase 1 Active</div>
-    <div style="font-size:10px;color:var(--text-tertiary);margin-top:5px">ClinicalBERT · XGBoost · Llama-3</div>
-  </div>
-</div>
+  <a href="VAIDYAA AI.html" class="nav-cta">Open Platform →</a>
+</nav>
 
-<div class="main">
-  <div class="topbar">
-    <div class="page-title" id="page-title">Dashboard</div>
-    <div class="topbar-right">
-      <div class="status-chip"><span class="status-dot" id="status-dot"></span><span id="status-text">Checking...</span></div>
+<!-- Hero -->
+<section class="hero">
+  <div class="hero-bg-blob blob-1"></div>
+  <div class="hero-bg-blob blob-2"></div>
+  <div class="hero-bg-blob blob-3"></div>
+
+  <div class="hero-left">
+    <div class="hero-eyebrow reveal">Medical AI · Research Grade</div>
+    <h1 class="hero-headline reveal reveal-delay-1">
+      Intelligent.<br/>Evidence-Based.<br/><em>Verified.</em>
+    </h1>
+    <p class="hero-sub reveal reveal-delay-2">
+      VAIDYAA AI brings multi-model clinical reasoning to your workflow — fact-checking medical claims, analyzing lab reports, and reading diagnostic imaging with radiologist-grade pipeline transparency.
+    </p>
+    <div class="hero-actions reveal reveal-delay-3">
+      <a href="VAIDYAA AI.html" class="btn-primary">Launch Platform</a>
+      <a href="#features" class="btn-ghost">Explore Features</a>
     </div>
   </div>
 
-  <div class="content">
-
-    <!-- DASHBOARD -->
-    <div class="view active" id="view-dash">
-      <div class="metrics">
-        <div class="metric">
-          <div class="metric-label">Reports analyzed</div>
-          <div class="metric-value">24</div>
-          <div class="metric-change" style="color:var(--accent)">↑ 3 today</div>
-        </div>
-        <div class="metric">
-          <div class="metric-label">Claims verified</div>
-          <div class="metric-value">61</div>
-          <div class="metric-change" style="color:var(--text-tertiary)">82% accuracy</div>
-        </div>
-        <div class="metric">
-          <div class="metric-label">Avg confidence</div>
-          <div class="metric-value">79<span style="font-size:16px;font-weight:400">%</span></div>
-          <div class="metric-change" style="color:var(--text-tertiary)">Platt-scaled</div>
-        </div>
+  <div class="hero-right reveal reveal-delay-2">
+    <div class="mock-card">
+      <div class="mock-topbar">
+        <div class="mock-topbar-dot" style="background:#ef4444"></div>
+        <div class="mock-topbar-dot" style="background:#f59e0b"></div>
+        <div class="mock-topbar-dot" style="background:#22c55e"></div>
+        <span style="margin-left:8px;font-family:var(--font-mono);font-size:11px;color:rgba(255,255,255,0.6)">claim-verifier · live</span>
       </div>
-
-      <div class="grid2">
-        <div class="quick-card" onclick="nav(document.querySelectorAll('.nav-item')[1],'report')">
-          <div style="font-size:20px;margin-bottom:8px">📄</div>
-          <div class="quick-title">Analyze lab report</div>
-          <div class="quick-sub">Upload PDF → ClinicalBERT → XGBoost → SHAP explanation</div>
-          <button class="btn btn-primary">Upload PDF →</button>
-        </div>
-        <div class="quick-card" onclick="nav(document.querySelectorAll('.nav-item')[2],'claim')">
-          <div style="font-size:20px;margin-bottom:8px">🔍</div>
-          <div class="quick-title">Verify medical claim</div>
-          <div class="quick-sub">Text claim → BioGPT → ChromaDB RAG → Llama-3 verdict</div>
-          <button class="btn btn-outline">Enter claim →</button>
-        </div>
-      </div>
-
-      <div class="card">
-        <div class="card-title">Recent activity</div>
-        <div class="activity-row">
-          <div class="activity-avatar">042</div>
-          <div style="flex:1"><div class="activity-name">Patient VDY-042</div><div class="activity-meta">Lab report · 2m ago</div></div>
-          <div class="activity-badge" style="background:var(--danger-light);color:var(--danger)">High risk</div>
-        </div>
-        <div class="activity-row">
-          <div class="activity-avatar">041</div>
-          <div style="flex:1"><div class="activity-name">Patient VDY-041</div><div class="activity-meta">Claim verify · 18m ago</div></div>
-          <div class="activity-badge" style="background:var(--accent-light);color:var(--accent)">Verified</div>
-        </div>
-        <div class="activity-row">
-          <div class="activity-avatar">040</div>
-          <div style="flex:1"><div class="activity-name">Patient VDY-040</div><div class="activity-meta">Lab report · 1h ago</div></div>
-          <div class="activity-badge" style="background:var(--warning-light);color:var(--warning)">Moderate</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- REPORT ANALYZER -->
-    <div class="view" id="view-report">
-      <div id="rs-upload">
-        <div class="upload-zone" onclick="triggerUpload()">
-          <div class="upload-icon-wrap">📄</div>
-          <div class="upload-title">Upload lab report</div>
-          <div class="upload-sub">PDF, CSV — max 10 MB</div>
-          <button class="btn btn-primary" onclick="event.stopPropagation();triggerUpload()">Choose file</button>
-          <input type="file" id="file-input" accept=".pdf,.csv" style="display:none" onchange="handleFileUpload(this)"/>
-        </div>
-      </div>
-
-      <div id="rs-processing" style="display:none">
-        <div class="file-chip" style="margin-bottom:12px">
-          <div class="file-icon">PDF</div>
-          <div style="flex:1"><div style="font-size:13px;font-weight:500;color:var(--text-primary)" id="upload-filename">report.pdf</div><div style="font-size:11px;color:var(--text-tertiary)">Uploading...</div></div>
-          <div class="loading-text">Processing</div>
-        </div>
-        <div class="card">
-          <div class="card-title">Pipeline</div>
-          <div class="step-list" id="step-list">
-            <div class="step pending"><div class="step-icon">1</div>OCR extraction (PyMuPDF + Tesseract)</div>
-            <div class="step pending"><div class="step-icon">2</div>ClinicalBERT NER</div>
-            <div class="step pending"><div class="step-icon">3</div>XGBoost prediction</div>
-            <div class="step pending"><div class="step-icon">4</div>SHAP explainability</div>
-            <div class="step pending"><div class="step-icon">5</div>GPT-4 / Llama-3 explanation</div>
+      <div class="mock-body">
+        <div class="mock-label">Submitted Claim</div>
+        <div class="mock-claim-box">"Aspirin reduces the risk of myocardial infarction by 25% in secondary prevention patients."</div>
+        <div class="mock-label">Analysis Pipeline</div>
+        <div class="mock-stepper">
+          <div class="mock-step">
+            <div class="mock-step-dot" style="background:var(--green-mid);color:#fff">✓</div>
+            <span style="font-size:12px;color:var(--ink-2)">ClinicalBERT NER — 3 entities extracted</span>
+          </div>
+          <div class="mock-step">
+            <div class="mock-step-dot" style="background:var(--green-mid);color:#fff">✓</div>
+            <span style="font-size:12px;color:var(--ink-2)">Evidence retrieval — 14 RCTs found</span>
+          </div>
+          <div class="mock-step">
+            <div class="mock-step-dot" style="background:var(--green-mid);color:#fff">✓</div>
+            <span style="font-size:12px;color:var(--ink-2)">XGBoost + SHAP scoring complete</span>
           </div>
         </div>
-      </div>
-
-      <div id="rs-results" style="display:none;flex-direction:column;gap:12px">
-        <div class="file-chip">
-          <div class="file-icon">PDF</div>
-          <div style="flex:1"><div style="font-size:13px;font-weight:500" id="result-filename">report.pdf</div><div style="font-size:11px;color:var(--text-tertiary)" id="result-meta">Processed</div></div>
-          <div style="font-size:11px;padding:3px 8px;border-radius:4px;background:var(--accent-light);color:var(--accent);font-weight:500">Complete</div>
-        </div>
-
-        <div class="grid2">
-          <div class="card">
-            <div class="card-title">Risk score</div>
-            <div class="risk-ring">
-              <div class="ring-wrap">
-                <svg width="80" height="80" viewBox="0 0 80 80">
-                  <circle cx="40" cy="40" r="32" fill="none" stroke="#E8EBF0" stroke-width="7"/>
-                  <circle id="risk-arc" cx="40" cy="40" r="32" fill="none" stroke="#E53E3E" stroke-width="7" stroke-dasharray="201.06" stroke-dashoffset="54.29" stroke-linecap="round" transform="rotate(-90 40 40)"/>
-                </svg>
-                <div class="ring-center">
-                  <div class="ring-num" id="risk-score">73</div>
-                  <div class="ring-denom">/100</div>
-                </div>
-              </div>
-              <div>
-                <div class="verdict-pill verdict-high" id="risk-label"><span class="verdict-dot"></span>High risk</div>
-                <div style="font-size:12px;color:var(--text-secondary)" id="risk-conf">Confidence: 87%</div>
-                <div style="font-size:11px;color:var(--text-tertiary);margin-top:3px">Platt-scaled XGBoost</div>
-              </div>
+        <div class="mock-verdict">
+          <div class="mock-verdict-label">◎ Verdict — Verified</div>
+          <div class="mock-verdict-text">Supported by Antithrombotic Trialists Collaboration (2009) and ACC/AHA guidelines. Effect size consistent across 14 RCTs.</div>
+          <div class="mock-confidence">
+            <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--ink-3);margin-bottom:4px">
+              <span>Confidence</span><span style="font-family:var(--font-mono);font-weight:700;color:var(--green-mid)">82%</span>
             </div>
+            <div class="mock-conf-bar"><div class="mock-conf-fill"></div></div>
           </div>
-
-          <div class="card">
-            <div class="card-title">SHAP factors</div>
-            <div id="shap-list"></div>
-          </div>
-        </div>
-
-        <div class="grid2">
-          <div class="card">
-            <div class="card-title">Lab values</div>
-            <div id="lab-list"></div>
-          </div>
-          <div class="card">
-            <div class="card-title">Extracted entities</div>
-            <div class="tag-label">Conditions</div>
-            <div class="tags" id="condition-tags" style="margin-bottom:10px"></div>
-            <div class="tag-label">Medications</div>
-            <div class="tags" id="medication-tags"></div>
-          </div>
-        </div>
-
-        <div class="disclaimer">⚠ AI-assisted analysis. NOT a medical diagnosis. Always consult a qualified healthcare professional.</div>
-        <div class="btn-row">
-          <button class="btn btn-outline" onclick="resetReport()">Analyze another</button>
         </div>
       </div>
     </div>
+  </div>
+</section>
 
-    <!-- CLAIM VERIFIER -->
-    <div class="view" id="view-claim">
-      <div class="card">
-        <div class="card-title">Medical claim</div>
-        <textarea class="claim-textarea" id="claim-input" placeholder="e.g. Patient shows signs of Type 2 Diabetes with fasting glucose of 186 mg/dL and HbA1c of 8.2%"></textarea>
-        <div class="btn-row">
-          <button class="btn btn-primary" id="verify-btn" onclick="verifyClaim()">Verify claim →</button>
-        </div>
-      </div>
-
-      <div id="claim-result" style="display:none;flex-direction:column;gap:12px">
-        <div class="grid2">
-          <div class="card">
-            <div class="card-title">Verdict</div>
-            <div id="verdict-text" class="verdict-verified">Verified</div>
-            <div style="font-size:12px;color:var(--text-secondary);line-height:1.6;margin:8px 0" id="verdict-summary">Loading...</div>
-            <div style="font-size:11px;color:var(--text-tertiary)" id="verdict-meta">Confidence: — · — sources</div>
-          </div>
-          <div class="card">
-            <div class="card-title">Evidence sources</div>
-            <div id="evidence-list" style="display:flex;flex-direction:column;gap:7px"></div>
-          </div>
-        </div>
-        <div class="disclaimer">⚠ AI-assisted analysis. NOT a medical diagnosis. Always consult a qualified healthcare professional.</div>
-        <div class="btn-row">
-          <button class="btn btn-outline" onclick="resetClaim()">Verify another</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- IMAGE ANALYSIS -->
-    <div class="view" id="view-image">
-      <div class="card phase2-card">
-        <div style="font-size:32px;margin-bottom:1rem;opacity:0.25">🔬</div>
-        <div style="font-size:15px;font-weight:600;color:var(--text-primary);margin-bottom:6px">Image Analysis</div>
-        <div style="font-size:12px;color:var(--text-tertiary);margin-bottom:1.25rem;line-height:1.7">DICOM · LiteMedSAM segmentation<br>CheXNet / ResNet classification · GradCAM</div>
-        <div class="phase2-badge">⏳ Planned — Phase 2, Weeks 3–4</div>
-      </div>
-    </div>
-
+<!-- Stats Strip -->
+<div class="stats-strip">
+  <div class="stat-item">
+    <div class="stat-num">4<span>+</span></div>
+    <div class="stat-label">Analysis Pipelines</div>
+  </div>
+  <div class="stat-divider"></div>
+  <div class="stat-item">
+    <div class="stat-num">6</div>
+    <div class="stat-label">AI Models in Pipeline</div>
+  </div>
+  <div class="stat-divider"></div>
+  <div class="stat-item">
+    <div class="stat-num">SHAP</div>
+    <div class="stat-label">Explainable AI Output</div>
+  </div>
+  <div class="stat-divider"></div>
+  <div class="stat-item">
+    <div class="stat-num">RAG</div>
+    <div class="stat-label">Evidence Retrieval</div>
   </div>
 </div>
+
+<!-- Features -->
+<section class="section" id="features">
+  <div class="section-eyebrow reveal">Platform Modules</div>
+  <h2 class="section-title reveal reveal-delay-1">Four pipelines. <em>One platform.</em></h2>
+  <p class="section-sub reveal reveal-delay-2">Each module is an end-to-end AI system — from raw input to explainable, evidence-backed clinical output.</p>
+  <div class="features-grid">
+    <div class="feature-card reveal">
+      <div class="feature-icon">◎</div>
+      <div class="feature-title">Claim Verifier</div>
+      <div class="feature-desc">Submit any medical claim and receive a verdict backed by PubMed evidence, confidence scores, and SHAP-explained feature attribution.</div>
+      <div class="feature-tags">
+        <span class="feature-tag">ClinicalBERT</span>
+        <span class="feature-tag">XGBoost</span>
+        <span class="feature-tag">RAG</span>
+        <span class="feature-tag">SHAP</span>
+      </div>
+    </div>
+    <div class="feature-card reveal reveal-delay-1">
+      <div class="feature-icon">▤</div>
+      <div class="feature-title">Report Analyzer</div>
+      <div class="feature-desc">Upload lab panels, clinical notes, or discharge summaries. Get risk scores, anomaly detection, NER-extracted entities, and care gap identification.</div>
+      <div class="feature-tags">
+        <span class="feature-tag">OCR</span>
+        <span class="feature-tag">NER</span>
+        <span class="feature-tag">Risk Score</span>
+        <span class="feature-tag">Anomaly</span>
+      </div>
+    </div>
+    <div class="feature-card reveal reveal-delay-2">
+      <div class="feature-icon">⬡</div>
+      <div class="feature-title">Image Analysis</div>
+      <div class="feature-desc">Analyze X-rays, CT scans, MRI, dermatology and pathology slides. Powered by ResNet classification with GradCAM heatmaps and radiological narratives.</div>
+      <div class="feature-tags">
+        <span class="feature-tag">DICOM</span>
+        <span class="feature-tag">GradCAM</span>
+        <span class="feature-tag">Segmentation</span>
+        <span class="feature-tag">LLM</span>
+      </div>
+    </div>
+    <div class="feature-card reveal reveal-delay-3">
+      <div class="feature-icon">≡</div>
+      <div class="feature-title">Job Tracker</div>
+      <div class="feature-desc">Every analysis runs async via Celery. Monitor live pipeline status, stream logs, cancel or retry jobs, and filter across all pipeline types.</div>
+      <div class="feature-tags">
+        <span class="feature-tag">Celery</span>
+        <span class="feature-tag">Live Polling</span>
+        <span class="feature-tag">Async</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- How it works -->
+<section class="section how-section" id="how">
+  <div class="section-eyebrow reveal">Pipeline Architecture</div>
+  <h2 class="section-title reveal reveal-delay-1">From input to <em>insight</em> in seconds.</h2>
+  <p class="section-sub reveal reveal-delay-2">Every analysis follows a deterministic, transparent pipeline. No black boxes — every decision is traceable.</p>
+  <div class="pipeline-flow reveal reveal-delay-2">
+    <div class="pipeline-step">
+      <div class="pipeline-num">1</div>
+      <div class="pipeline-step-title">Submit</div>
+      <div class="pipeline-step-desc">Claim text, report file, or medical image uploaded via secure API</div>
+    </div>
+    <div class="pipeline-step">
+      <div class="pipeline-num">2</div>
+      <div class="pipeline-step-title">Extract</div>
+      <div class="pipeline-step-desc">OCR + ClinicalBERT NER identifies entities, conditions, values</div>
+    </div>
+    <div class="pipeline-step">
+      <div class="pipeline-num">3</div>
+      <div class="pipeline-step-title">Score</div>
+      <div class="pipeline-step-desc">XGBoost classifies risk; SHAP explains the top contributing features</div>
+    </div>
+    <div class="pipeline-step">
+      <div class="pipeline-num">4</div>
+      <div class="pipeline-step-title">Retrieve</div>
+      <div class="pipeline-step-desc">RAG queries PubMed, clinical guidelines, and knowledge base</div>
+    </div>
+    <div class="pipeline-step">
+      <div class="pipeline-num">5</div>
+      <div class="pipeline-step-title">Synthesize</div>
+      <div class="pipeline-step-desc">LLM generates the final verdict, narrative, and citations</div>
+    </div>
+  </div>
+</section>
+
+<!-- Trust & Safety -->
+<section class="section" id="trust">
+  <div class="section-eyebrow reveal">Trust & Safety</div>
+  <h2 class="section-title reveal reveal-delay-1">Built for <em>clinical rigor.</em></h2>
+  <p class="section-sub reveal reveal-delay-2">Every design decision prioritizes transparency, explainability, and responsible AI — never a substitute for medical judgment.</p>
+  <div class="trust-grid">
+    <div class="trust-card reveal">
+      <div class="trust-icon">◈</div>
+      <div>
+        <div class="trust-title">Explainable AI</div>
+        <div class="trust-desc">SHAP values for every prediction. Know exactly which features drove each verdict — no hidden reasoning.</div>
+      </div>
+    </div>
+    <div class="trust-card reveal reveal-delay-1">
+      <div class="trust-icon">◎</div>
+      <div>
+        <div class="trust-title">Evidence-Backed</div>
+        <div class="trust-desc">Every claim and report finding is grounded in peer-reviewed citations from PubMed and clinical guidelines.</div>
+      </div>
+    </div>
+    <div class="trust-card reveal reveal-delay-2">
+      <div class="trust-icon">◬</div>
+      <div>
+        <div class="trust-title">Uncertainty Flagging</div>
+        <div class="trust-desc">Low-confidence outputs are explicitly flagged. The system tells you when it doesn't know.</div>
+      </div>
+    </div>
+    <div class="trust-card reveal reveal-delay-3">
+      <div class="trust-icon">▣</div>
+      <div>
+        <div class="trust-title">Async Audit Trail</div>
+        <div class="trust-desc">Every job is logged with Celery task IDs, timestamps, pipeline steps, and full result history.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Medical Disclaimer strip -->
+<div class="disclaimer-strip">
+  <span style="font-size:18px;flex-shrink:0">⚠</span>
+  <p><strong>Medical Disclaimer:</strong> VAIDYAA AI is a research and informational tool only. Outputs do not constitute medical advice, diagnosis, or clinical treatment recommendations. All findings must be reviewed and validated by a licensed medical professional before any clinical application.</p>
+</div>
+
+<!-- CTA -->
+<section class="cta-section">
+  <div class="cta-bg-circle cta-circle-1"></div>
+  <div class="cta-bg-circle cta-circle-2"></div>
+  <div class="cta-eyebrow reveal">Ready to begin?</div>
+  <h2 class="cta-headline reveal reveal-delay-1">Start your first<br/>analysis today.</h2>
+  <p class="cta-sub reveal reveal-delay-2">Verify claims, analyze reports, and read images — all in one platform designed for clinical intelligence.</p>
+  <a href="VAIDYAA AI.html" class="btn-white reveal reveal-delay-3">Open VAIDYAA AI →</a>
+</section>
+
+<!-- Footer -->
+<footer>
+  <div class="footer-logo">
+    <img src="uploads/WhatsApp Image 2026-04-25 at 9.02.05 AM.jpeg" alt="VAIDYAA AI" style="height:30px;width:30px;object-fit:cover;border-radius:7px;" />
+    <span class="footer-logo-name">VAIDYAA AI</span>
+  </div>
+  <div class="footer-links">
+    <a href="#features">Features</a>
+    <a href="#how">Pipeline</a>
+    <a href="#trust">Safety</a>
+    <a href="VAIDYAA AI.html">Platform</a>
+  </div>
+  <div class="footer-copy">© 2026 VAIDYAA AI · For research use only</div>
+</footer>
 
 <script>
-const API = (location.origin.includes('localhost') || location.origin.includes('127.0.0.1'))
-  ? 'http://localhost:8000/api/v1'
-  : location.origin + '/api/v1';
+// Scroll reveal
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
+}, { threshold: 0.12, rootMargin: '0px 0px -40px 0px' });
+document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
 
-const TITLES = {dash:'Dashboard',report:'Report Analyzer',claim:'Claim Verifier',image:'Image Analysis'};
+// Force hero reveals immediately
+document.querySelectorAll('.hero .reveal').forEach(el => {
+  setTimeout(() => el.classList.add('visible'), 100 + parseInt(el.className.match(/delay-(\d)/)?.[1] || 0) * 150);
+});
 
-// ── Nav ──────────────────────────────────────────────────────────────────────
-function nav(el, id) {
-  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-  el.classList.add('active');
-  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-  document.getElementById('view-' + id).classList.add('active');
-  document.getElementById('page-title').textContent = TITLES[id] || id;
-}
-
-// ── Health check ─────────────────────────────────────────────────────────────
-fetch(API.replace('/api/v1','') + '/health')
-  .then(r => r.json())
-  .then(() => {
-    document.getElementById('status-dot').style.background = '#0EA271';
-    document.getElementById('status-text').textContent = 'API connected · :8000';
-  })
-  .catch(() => {
-    document.getElementById('status-dot').style.background = '#E53E3E';
-    document.getElementById('status-text').textContent = 'API offline';
-  });
-
-// ── Report upload ─────────────────────────────────────────────────────────────
-function triggerUpload() {
-  document.getElementById('file-input').click();
-}
-
-async function handleFileUpload(input) {
-  const file = input.files[0];
-  if (!file) return;
-
-  document.getElementById('rs-upload').style.display = 'none';
-  document.getElementById('rs-processing').style.display = 'block';
-  document.getElementById('upload-filename').textContent = file.name;
-
-  const steps = document.querySelectorAll('#step-list .step');
-  let stepIdx = 0;
-
-  function advanceStep() {
-    if (stepIdx > 0) {
-      steps[stepIdx - 1].className = 'step done';
-      steps[stepIdx - 1].querySelector('.step-icon').textContent = '✓';
-    }
-    if (stepIdx < steps.length) {
-      steps[stepIdx].className = 'step active';
-      const ico = steps[stepIdx].querySelector('.step-icon');
-      ico.style = 'border:1.5px solid rgba(43,108,176,0.3);border-top-color:var(--blue);border-radius:50%';
-      ico.className = 'step-icon spin';
-      stepIdx++;
-    }
-  }
-  advanceStep();
-
-  try {
-    const fd = new FormData();
-    fd.append('file', file);
-
-    const res = await fetch(API + '/analyze/report/lab', { method: 'POST', body: fd });
-    if (!res.ok) throw new Error('Upload failed');
-    const data = await res.json();
-    const taskId = data.celery_task_id || data.id;
-
-    // Poll for completion
-    const poll = setInterval(async () => {
-      try {
-        const r = await fetch(API + '/analyze/report/' + data.id);
-        const result = await r.json();
-
-        if (result.status === 'completed' || result.analysis_result) {
-          clearInterval(poll);
-          // finish all steps
-          while (stepIdx <= steps.length) advanceStep();
-          setTimeout(() => showReportResults(result, file.name), 400);
-        } else if (result.status === 'failed') {
-          clearInterval(poll);
-          showDemoResults(file.name);
-        } else {
-          advanceStep();
-        }
-      } catch(e) { clearInterval(poll); showDemoResults(file.name); }
-    }, 2000);
-
-    setTimeout(() => { clearInterval(poll); showDemoResults(file.name); }, 30000);
-
-  } catch(e) {
-    showDemoResults(file.name);
-  }
-}
-
-function showReportResults(result, filename) {
-  document.getElementById('rs-processing').style.display = 'none';
-  document.getElementById('rs-results').style.display = 'flex';
-  document.getElementById('result-filename').textContent = filename;
-
-  const ar = result.analysis_result || {};
-  const conf = Math.round((result.confidence || ar.confidence || 73));
-  document.getElementById('risk-score').textContent = conf;
-  document.getElementById('risk-conf').textContent = 'Confidence: ' + conf + '%';
-
-  const arc = document.getElementById('risk-arc');
-  const offset = 201.06 * (1 - conf / 100);
-  arc.setAttribute('stroke-dashoffset', offset);
-  arc.setAttribute('stroke', conf >= 70 ? '#E53E3E' : conf >= 40 ? '#D97706' : '#0EA271');
-
-  document.getElementById('risk-label').innerHTML = `<span class="verdict-dot"></span>${conf >= 70 ? 'High risk' : conf >= 40 ? 'Moderate' : 'Low risk'}`;
-
-  renderShap(ar.shap_values || ar.top_factors || {});
-  renderLabs(ar.lab_values || result.parsed_data || {});
-  renderEntities(result.extracted_entities || {});
-}
-
-function showDemoResults(filename) {
-  document.getElementById('rs-processing').style.display = 'none';
-  document.getElementById('rs-results').style.display = 'flex';
-  document.getElementById('result-filename').textContent = filename || 'report.pdf';
-  document.getElementById('result-meta').textContent = 'Demo results (backend processing)';
-  renderShap({glucose:0.82,ldl:0.61,bmi:0.44,hdl:0.38,hba1c:0.35});
-  renderLabs({glucose:'186 mg/dL:high',hemoglobin:'13.5 g/dL:ok',ldl:'142 mg/dL:high',hdl:'38 mg/dL:low',creatinine:'1.1 mg/dL:ok',cholesterol:'224 mg/dL:high'});
-  renderEntities({conditions:['Type 2 Diabetes','Hypertension'],medications:['Metformin','Lisinopril']});
-}
-
-function renderShap(vals) {
-  const el = document.getElementById('shap-list');
-  el.innerHTML = '';
-  const entries = typeof vals === 'object' && !Array.isArray(vals)
-    ? Object.entries(vals).slice(0,5)
-    : (vals || []).slice(0,5).map(v => [v.feature, v.shap]);
-  entries.forEach(([k, v]) => {
-    const pct = Math.min(Math.abs(parseFloat(v)) * 100, 100);
-    const color = parseFloat(v) > 0 ? '#E53E3E' : '#0EA271';
-    el.innerHTML += `<div class="shap-row">
-      <div class="shap-name">${k}</div>
-      <div class="shap-track"><div class="shap-fill" style="width:${pct}%;background:${color}"></div></div>
-      <div class="shap-val">${parseFloat(v)>0?'+':''}${parseFloat(v).toFixed(2)}</div>
-    </div>`;
-  });
-}
-
-function renderLabs(vals) {
-  const el = document.getElementById('lab-list');
-  el.innerHTML = '';
-  Object.entries(vals).forEach(([k, v]) => {
-    const parts = String(v).split(':');
-    const display = parts[0];
-    const status = parts[1] || 'ok';
-    const cls = status === 'high' ? 'val-high' : status === 'low' ? 'val-low' : 'val-ok';
-    el.innerHTML += `<div class="lab-row"><div class="lab-name">${k}</div><div class="lab-val ${cls}">${display}</div></div>`;
-  });
-}
-
-function renderEntities(entities) {
-  const cEl = document.getElementById('condition-tags');
-  const mEl = document.getElementById('medication-tags');
-  cEl.innerHTML = '';
-  mEl.innerHTML = '';
-  (entities.conditions || []).forEach(c => { cEl.innerHTML += `<span class="tag tag-condition">${c}</span>`; });
-  (entities.medications || []).forEach(m => { mEl.innerHTML += `<span class="tag tag-medication">${m}</span>`; });
-  if (!cEl.innerHTML) cEl.innerHTML = '<span style="font-size:11px;color:var(--text-tertiary)">None extracted</span>';
-  if (!mEl.innerHTML) mEl.innerHTML = '<span style="font-size:11px;color:var(--text-tertiary)">None extracted</span>';
-}
-
-function resetReport() {
-  document.getElementById('rs-results').style.display = 'none';
-  document.getElementById('rs-upload').style.display = 'block';
-  document.getElementById('file-input').value = '';
-  document.querySelectorAll('#step-list .step').forEach((s, i) => {
-    s.className = 'step pending';
-    s.querySelector('.step-icon').textContent = i + 1;
-    s.querySelector('.step-icon').style = '';
-    s.querySelector('.step-icon').className = 'step-icon';
-  });
-}
-
-// ── Claim verify ──────────────────────────────────────────────────────────────
-async function verifyClaim() {
-  const text = document.getElementById('claim-input').value.trim();
-  if (!text) return;
-
-  const btn = document.getElementById('verify-btn');
-  btn.textContent = 'Verifying...';
-  btn.disabled = true;
-
-  try {
-    const res = await fetch(API + '/verify/claim', {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({claim_text: text})
-    });
-    const data = await res.json();
-    const claimId = data.id;
-
-    // Poll for result
-    let attempts = 0;
-    const poll = setInterval(async () => {
-      attempts++;
-      try {
-        const r = await fetch(API + '/verify/claim/' + claimId);
-        const result = await r.json();
-
-        if (result.status !== 'processing' && result.status !== 'pending') {
-          clearInterval(poll);
-          btn.textContent = 'Verify claim →';
-          btn.disabled = false;
-          showClaimResult(result);
-        } else if (attempts > 30) {
-          clearInterval(poll);
-          btn.textContent = 'Verify claim →';
-          btn.disabled = false;
-          showClaimResult(data);
-        }
-      } catch(e) {
-        clearInterval(poll);
-        btn.textContent = 'Verify claim →';
-        btn.disabled = false;
-        showDemoClaimResult();
-      }
-    }, 2000);
-
-  } catch(e) {
-    btn.textContent = 'Verify claim →';
-    btn.disabled = false;
-    showDemoClaimResult();
-  }
-}
-
-function showClaimResult(result) {
-  document.getElementById('claim-result').style.display = 'flex';
-
-  const statusMap = {verified:'Verified',refuted:'Refuted',uncertain:'Uncertain',processing:'Processing'};
-  const colorMap = {verified:'verdict-verified',refuted:'verdict-refuted',uncertain:'verdict-uncertain',processing:'verdict-uncertain'};
-  const status = (result.status || 'uncertain').toLowerCase();
-
-  const vEl = document.getElementById('verdict-text');
-  vEl.textContent = statusMap[status] || status;
-  vEl.className = colorMap[status] || 'verdict-uncertain';
-
-  const shap = result.shap_values || {};
-  document.getElementById('verdict-summary').textContent =
-    shap.verification_summary || shap.confidence_note || 'Analysis complete.';
-
-  const conf = result.confidence ? Math.round(result.confidence) + '%' : '—';
-  const cites = (result.source_citations || []).length;
-  document.getElementById('verdict-meta').textContent = `Confidence: ${conf} · ${cites} source${cites !== 1 ? 's' : ''}`;
-
-  const evEl = document.getElementById('evidence-list');
-  evEl.innerHTML = '';
-  const citations = result.source_citations || [];
-  if (citations.length === 0) {
-    evEl.innerHTML = '<div style="font-size:12px;color:var(--text-tertiary)">No citations retrieved</div>';
-  } else {
-    citations.slice(0,3).forEach((c, i) => {
-      const title = c.title || c.source || 'Source ' + (i+1);
-      evEl.innerHTML += `<div class="evidence-item"><div class="evidence-num">${i+1}</div>${title}</div>`;
-    });
-  }
-}
-
-function showDemoClaimResult() {
-  showClaimResult({
-    status: 'verified',
-    confidence: 91,
-    source_citations: [
-      {title:'ADA Standards of Care 2024'},
-      {title:'PubMed: T2DM diagnosis criteria'},
-      {title:'WHO ICD-10 Classification E11'},
-    ],
-    shap_values: {verification_summary: 'Evidence supports the association between elevated glucose and diabetes risk per ADA 2024 guidelines.'}
-  });
-}
-
-function resetClaim() {
-  document.getElementById('claim-result').style.display = 'none';
-  document.getElementById('claim-input').value = '';
-}
+// Navbar scroll shadow
+window.addEventListener('scroll', () => {
+  document.getElementById('navbar').classList.toggle('scrolled', window.scrollY > 20);
+});
 </script>
 </body>
 </html>
