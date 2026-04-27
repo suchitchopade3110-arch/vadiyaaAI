@@ -16,11 +16,11 @@ class Settings(BaseSettings):
     ]
 
     # PostgreSQL
-    POSTGRES_HOST: str = "localhost"
+    POSTGRES_HOST: str = "postgres"
     POSTGRES_PORT: int = 5432
     POSTGRES_DB: str = "vaidyaai"
     POSTGRES_USER: str = "vaidya"
-    POSTGRES_PASSWORD: str = "vaidya"
+    POSTGRES_PASSWORD: str = "vaidya123"
 
     @property
     def DATABASE_URL(self) -> str:
@@ -30,9 +30,9 @@ class Settings(BaseSettings):
         )
 
     # Redis / Celery
-    REDIS_URL: str = "redis://localhost:6379/0"
-    CELERY_BROKER_URL: str = "redis://localhost:6379/0"
-    CELERY_RESULT_BACKEND: str = "redis://localhost:6379/1"
+    REDIS_URL: str = "redis://redis:6379/0"
+    CELERY_BROKER_URL: str = "redis://redis:6379/0"
+    CELERY_RESULT_BACKEND: str = "redis://redis:6379/1"
 
     # LLM
     OPENAI_API_KEY: str = ""

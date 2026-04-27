@@ -10,6 +10,7 @@ python-multipart==0.0.9          # File uploads
 # ── Database ──────────────────────────────────────────────────────────────────
 sqlalchemy==2.0.30
 asyncpg==0.29.0                  # Async PostgreSQL driver
+psycopg2-binary==2.9.9           # Sync PostgreSQL driver for Celery workers
 alembic==1.13.1                  # DB migrations
 
 # ── Config ────────────────────────────────────────────────────────────────────
