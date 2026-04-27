@@ -17,12 +17,10 @@ logger = logging.getLogger(__name__)
 def _get_conn():
     """Sync PostgreSQL connection for Celery workers."""
     import psycopg2
-    import os
-    # Use sync URL (psycopg2), not asyncpg
-    db_url = os.getenv(
-        "DATABASE_SYNC_URL",
-        "postgresql://vaidya:vaidya123@localhost:5432/vaidyaai"
-    )
+    from app.core.config import settings
+    
+    # Construct sync URL from settings
+    db_url = f"postgresql://{settings.POSTGRES_USER}:{settings.POSTGRES_PASSWORD}@{settings.POSTGRES_HOST}:{settings.POSTGRES_PORT}/{settings.POSTGRES_DB}"
     return psycopg2.connect(db_url)
 
 
@@ -52,7 +50,8 @@ def persist_claim(result: dict) -> bool:
                 completed_at           = %s
             WHERE id = %s
         """, (
-            "complete",
+            # Map finished status to the verdict for claims
+            result.get("verdict", "UNCERTAIN").upper(),
             json.dumps(result.get("extracted_entities", {})),
             json.dumps(result.get("sources", [])),
             result.get("source_count", 0),
@@ -105,7 +104,7 @@ def persist_report(result: dict) -> bool:
                 completed_at       = %s
             WHERE id = %s
         """, (
-            "complete",
+            "COMPLETE",
             result.get("raw_text_preview"),
             json.dumps(result.get("extracted_entities", {})),
             result.get("risk_score"),
@@ -166,7 +165,7 @@ def persist_image_analysis(result: dict) -> bool:
                 completed_at             = %s
             WHERE id = %s
         """, (
-            "complete",
+            "COMPLETE",
             json.dumps(result.get("dicom_metadata", {})),
             seg.get("mask_path"),
             seg.get("overlay_path"),
@@ -206,7 +205,7 @@ def mark_failed(table: str, record_id: str, error: str) -> bool:
         conn = _get_conn()
         cur  = conn.cursor()
         cur.execute(
-            f"UPDATE {table} SET status = 'failed', completed_at = %s WHERE id = %s",
+            f"UPDATE {table} SET status = 'FAILED', completed_at = %s WHERE id = %s",
             (datetime.utcnow(), record_id)
         )
         conn.commit()
@@ -226,8 +225,8 @@ def insert_claim(claim_id: str, claim_text: str, task_id: str, patient_id: str =
         conn = _get_conn()
         cur  = conn.cursor()
         cur.execute("""
-            INSERT INTO claims (id, claim_text, status, celery_task_id, created_at)
-            VALUES (%s, %s, 'pending', %s, %s)
+            INSERT INTO claims (id, claim_text, status, celery_task_id, created_at, uncertainty_flag, hallucination_detected)
+            VALUES (%s, %s, 'PENDING', %s, %s, FALSE, FALSE)
             ON CONFLICT (id) DO NOTHING
         """, (claim_id, claim_text, task_id, datetime.utcnow()))
         conn.commit()
@@ -246,8 +245,8 @@ def insert_report(report_id: str, report_type: str, file_path: str,
         conn = _get_conn()
         cur  = conn.cursor()
         cur.execute("""
-            INSERT INTO reports (id, report_type, file_path, file_format, status, celery_task_id, created_at)
-            VALUES (%s, %s, %s, %s, 'pending', %s, %s)
+            INSERT INTO reports (id, report_type, file_path, file_format, status, celery_task_id, created_at, uncertainty_flag)
+            VALUES (%s, %s, %s, %s, 'PENDING', %s, %s, FALSE)
             ON CONFLICT (id) DO NOTHING
         """, (report_id, report_type, file_path, file_format, task_id, datetime.utcnow()))
         conn.commit()
@@ -266,8 +265,8 @@ def insert_image_analysis(analysis_id: str, image_type: str, file_path: str,
         conn = _get_conn()
         cur  = conn.cursor()
         cur.execute("""
-            INSERT INTO image_analyses (id, image_type, file_path, file_format, status, celery_task_id, created_at)
-            VALUES (%s, %s, %s, %s, 'pending', %s, %s)
+            INSERT INTO image_analyses (id, image_type, file_path, file_format, status, celery_task_id, created_at, uncertainty_flag, anomaly_detected)
+            VALUES (%s, %s, %s, %s, 'PENDING', %s, %s, FALSE, FALSE)
             ON CONFLICT (id) DO NOTHING
         """, (analysis_id, image_type, file_path, file_format, task_id, datetime.utcnow()))
         conn.commit()

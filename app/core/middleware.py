@@ -17,28 +17,37 @@ from app.core.config import settings
 MAX_BYTES = settings.MAX_UPLOAD_SIZE_MB * 1024 * 1024
 
 
-class MaxBodySizeMiddleware(BaseHTTPMiddleware):
-    """Rejects oversized requests before they hit any route handler."""
-    async def dispatch(self, request: Request, call_next):
-        content_length = request.headers.get("content-length")
-        if content_length:
-            if int(content_length) > MAX_BYTES:
-                return JSONResponse(
-                    status_code=413,
-                    content={
-                        "detail": (
-                            f"Request body exceeds {settings.MAX_UPLOAD_SIZE_MB} MB limit. "
-                            f"Declared Content-Length: {int(content_length) / 1024 / 1024:.1f} MB."
-                        )
-                    },
-                )
-        return await call_next(request)
+class MaxBodySizeMiddleware:
+    """Pure ASGI Middleware to reject oversized requests."""
+    def __init__(self, app: ASGIApp):
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send):
+        if scope["type"] != "http":
+            return await self.app(scope, receive, send)
+
+        content_length = 0
+        for header, value in scope.get("headers", []):
+            if header.lower() == b"content-length":
+                content_length = int(value)
+                break
+        
+        if content_length > MAX_BYTES:
+            response = JSONResponse(
+                status_code=413,
+                content={
+                    "detail": f"Request body exceeds {settings.MAX_UPLOAD_SIZE_MB} MB limit."
+                },
+            )
+            return await response(scope, receive, send)
+
+        return await self.app(scope, receive, send)
 
 
 class APIContractMiddleware:
     """
     Pure ASGI Middleware for Day 3 API Contract Compliance.
-    Handles Headers and Body injection without BaseHTTPMiddleware loop issues.
+    Handles Headers and Body injection safely.
     """
     def __init__(self, app: ASGIApp):
         self.app = app
@@ -49,13 +58,16 @@ class APIContractMiddleware:
 
         start_time = time.time()
         request_id = str(uuid.uuid4())
-        
-        # Scope-level request_id for logging
         scope["request_id"] = request_id
 
         async def send_wrapper(message):
             if message["type"] == "http.response.start":
-                headers = list(message.get("headers", []))
+                headers = []
+                # Filter out content-length because we might change body size
+                for header, value in message.get("headers", []):
+                    if header.lower() != b"content-length":
+                        headers.append((header, value))
+                
                 headers.append((b"X-Medical-Disclaimer", b"AI-assisted analysis. NOT diagnostic."))
                 headers.append((b"X-Request-ID", request_id.encode()))
                 
@@ -67,15 +79,17 @@ class APIContractMiddleware:
             
             elif message["type"] == "http.response.body":
                 try:
-                    content = json.loads(message["body"].decode())
-                    if isinstance(content, dict):
-                        content["request_id"] = request_id
-                        content["medical_disclaimer"] = settings.MEDICAL_DISCLAIMER
-                        content["timestamp"] = datetime.now(UTC).isoformat()
-                        
-                        new_body = json.dumps(content).encode()
-                        message["body"] = new_body
-                except:
+                    # Only attempt to modify if it looks like JSON
+                    body = message.get("body", b"")
+                    if body and body.startswith(b"{"):
+                        content = json.loads(body.decode())
+                        if isinstance(content, dict):
+                            content["request_id"] = request_id
+                            content["medical_disclaimer"] = settings.MEDICAL_DISCLAIMER
+                            content["timestamp"] = datetime.now(UTC).isoformat()
+                            
+                            message["body"] = json.dumps(content).encode()
+                except Exception:
                     pass
                 await send(message)
             else:

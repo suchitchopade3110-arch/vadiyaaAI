@@ -14,6 +14,7 @@ class AnalysisType(str, Enum):
 class ImageAsyncResponse(BaseResponse):
     analysis_id: UUID
     task_id: str
+    id: str  # Added for frontend compatibility
     status: str = "pending"
     analysis_type: AnalysisType
     poll_url: str

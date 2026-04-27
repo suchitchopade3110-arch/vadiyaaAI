@@ -21,7 +21,7 @@ router = APIRouter()
 VALID_REPORT_TYPES = {t.value for t in ReportTypeEnum}
 
 
-@router.post("/report/{report_type}", response_model=ReportAsyncResponse, status_code=202)
+@router.post("/{report_type}", response_model=ReportAsyncResponse, status_code=202)
 async def submit_report_analysis(
     report_type: str,
     file: UploadFile = File(..., description="Lab report / clinical note: PDF or CSV"),
@@ -62,7 +62,6 @@ async def submit_report_analysis(
     # ── Dispatch Celery task ───────────────────────────────────────────────
     task = analyze_report.apply_async(
         args=[report_id, file_path, report_type, extension],
-        queue="reports",
     )
 
     # ── Insert pending row in DB ───────────────────────────────────────────
@@ -72,12 +71,29 @@ async def submit_report_analysis(
         request_id=request_id,
         report_id=uuid.UUID(report_id),
         task_id=task.id,
+        id=task.id,
         status="pending",
         report_type=ReportTypeEnum(report_type),
-        poll_url=f"/api/v1/analyze/report/status/{task.id}",
+        poll_url=f"/api/v1/analyze/report/{task.id}",
         estimated_seconds=20,
         medical_disclaimer=MEDICAL_DISCLAIMER,
     )
+
+
+@router.get("/{task_id}")
+async def get_report_combined(task_id: str):
+    """Combined status and result endpoint for the frontend."""
+    result = AsyncResult(task_id)
+    state = result.state
+
+    if state == "SUCCESS":
+        return result.result
+    
+    return {
+        "status": state.lower(),
+        "task_id": task_id,
+        "id": task_id
+    }
 
 
 @router.get("/report/status/{task_id}", response_model=JobStatus)

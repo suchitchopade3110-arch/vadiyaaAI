@@ -7,12 +7,12 @@ import enum
 
 
 class ClaimStatus(str, enum.Enum):
-    PENDING = "pending"
-    PROCESSING = "processing"
-    VERIFIED = "verified"
-    REFUTED = "refuted"
-    UNCERTAIN = "uncertain"
-    FAILED = "failed"
+    PENDING = "PENDING"
+    PROCESSING = "PROCESSING"
+    VERIFIED = "VERIFIED"
+    REFUTED = "REFUTED"
+    UNCERTAIN = "UNCERTAIN"
+    FAILED = "FAILED"
 
 
 class Claim(Base):

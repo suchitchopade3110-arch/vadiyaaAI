@@ -15,7 +15,7 @@ router = APIRouter()
 
 VALID_IMAGE_TYPES = {t.value for t in AnalysisType}
 
-@router.post("/image/{analysis_type}", response_model=ImageAsyncResponse, status_code=status.HTTP_202_ACCEPTED)
+@router.post("/{analysis_type}", response_model=ImageAsyncResponse, status_code=status.HTTP_202_ACCEPTED)
 async def submit_image_analysis(
     analysis_type: str,
     file: UploadFile = File(..., description="Medical image: DICOM, JPG, PNG"),
@@ -48,20 +48,35 @@ async def submit_image_analysis(
     # Dispatch Celery task
     task = analyze_image.apply_async(
         args=[analysis_id, file_path, analysis_type, extension],
-        queue="images",   # GPU queue
     )
 
     return ImageAsyncResponse(
         request_id=request_id,
         analysis_id=uuid.UUID(analysis_id),
-        id=uuid.UUID(analysis_id),
+        id=task.id, # Use task_id for consistency in polling
         task_id=task.id,
         status="pending",
         analysis_type=AnalysisType(analysis_type),
-        poll_url=f"/api/v1/analyze/image/{analysis_id}",
+        poll_url=f"/api/v1/analyze/image/{task.id}",
         estimated_seconds=45,
         medical_disclaimer=MEDICAL_DISCLAIMER,
     )
+
+
+@router.get("/{task_id}")
+async def get_image_combined(task_id: str):
+    """Combined status and result endpoint for the frontend."""
+    result = AsyncResult(task_id)
+    state = result.state
+
+    if state == "SUCCESS":
+        return result.result
+    
+    return {
+        "status": state.lower(),
+        "task_id": task_id,
+        "id": task_id
+    }
 
 
 @router.get("/image/{analysis_id}")

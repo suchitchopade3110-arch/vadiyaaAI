@@ -18,6 +18,7 @@ class ClaimRequest(BaseModel):
 class ClaimAsyncResponse(BaseResponse):
     claim_id: UUID
     task_id: str
+    id: str  # Added for frontend compatibility
     status: str = "pending"
     poll_url: str
     estimated_seconds: int = 15

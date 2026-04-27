@@ -12,10 +12,10 @@ class ReportType(str, enum.Enum):
     DISCHARGE = "discharge"
 
 class AnalysisStatus(str, enum.Enum):
-    PENDING = "pending"
-    PROCESSING = "processing"
-    COMPLETE = "complete"
-    FAILED = "failed"
+    PENDING = "PENDING"
+    PROCESSING = "PROCESSING"
+    COMPLETE = "COMPLETE"
+    FAILED = "FAILED"
 
 
 class Report(Base):

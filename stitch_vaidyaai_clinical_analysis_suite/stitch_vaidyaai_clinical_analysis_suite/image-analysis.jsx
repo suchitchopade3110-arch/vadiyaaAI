@@ -204,7 +204,16 @@ function ImageAnalysis() {
           // Done — map to display format
           clearInterval(timerRef.current);
           setStep(IMAGE_STEPS.length);
-          setResult(data);
+          setResult({
+            ...data,
+            findings:  data.findings || [],
+            roi:       data.roi || [],
+            citations: (data.citations || data.sources || []).map(c => ({
+              title: c.title || c.source_id || 'Source',
+              source: c.url || c.source || '',
+              snippet: c.excerpt || c.snippet || '',
+            })),
+          });
           setPhase('done');
         } catch (err) {
           console.error('Poll error:', err);
@@ -302,12 +311,12 @@ function ImageAnalysis() {
             <div style={{ flex: '1', minWidth: '260px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <Card>
                 <SectionLabel>Classification Findings</SectionLabel>
-                {result.findings.map((f, i) => <FindingRow key={i} finding={f} />)}
+                {result.findings?.map((f, i) => <FindingRow key={i} finding={f} />)}
               </Card>
               {result.roi.length > 0 && (
                 <Card>
                   <SectionLabel>Region of Interest (ROI)</SectionLabel>
-                  {result.roi.map((r, i) => (
+                  {result.roi?.map((r, i) => (
                     <div key={i} style={{ marginBottom: '8px', padding: '10px', background: 'var(--bg-elevated)', borderRadius: '6px', border: '1px solid var(--border)' }}>
                       <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-primary)' }}>{r.region}</div>
                       <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px' }}>{r.finding}</div>

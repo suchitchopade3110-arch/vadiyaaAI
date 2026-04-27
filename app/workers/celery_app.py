@@ -21,11 +21,6 @@ celery_app.conf.update(
     task_max_retries=3,
     task_default_retry_delay=5,
     result_expires=3600,
-    task_routes={
-        "app.workers.claim_tasks.*":  {"queue": "claims"},
-        "app.workers.image_tasks.*":  {"queue": "images"},
-        "app.workers.report_tasks.*": {"queue": "reports"},
-    },
     worker_prefetch_multiplier=1,
     timezone="UTC",
 )

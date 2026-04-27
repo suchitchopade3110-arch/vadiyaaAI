@@ -1,5 +1,3 @@
-version: "3.9"
-
 # ── VaidyaAI — Docker Compose Stack ──────────────────────────────────────────
 # Services: FastAPI app + PostgreSQL + Redis + Celery workers
 # Usage:
@@ -15,7 +13,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: vaidyaai-api
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     ports:
       - "8000:8000"
@@ -43,10 +40,11 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: vaidyaai-worker-claims
     command: celery -A app.workers.celery_app worker -Q claims -c 4 -l INFO -n claims@%h
     environment:
       - DATABASE_URL=postgresql+asyncpg://vaidya:vaidya123@postgres:5432/vaidyaai
+      # FIX BUG 2: psycopg2 (sync) needs postgres hostname, not localhost
+      - DATABASE_SYNC_URL=postgresql://vaidya:vaidya123@postgres:5432/vaidyaai
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/1
@@ -65,12 +63,13 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: vaidyaai-worker-images
     command: celery -A app.workers.celery_app worker -Q images -c 1 -l INFO -n images@%h
     # NOTE: Set -c 1 for image workers — MedSAM is GPU/memory intensive
     # Phase 2: Add GPU support: runtime: nvidia + device_requests
     environment:
       - DATABASE_URL=postgresql+asyncpg://vaidya:vaidya123@postgres:5432/vaidyaai
+      # FIX BUG 2: psycopg2 (sync) needs postgres hostname, not localhost
+      - DATABASE_SYNC_URL=postgresql://vaidya:vaidya123@postgres:5432/vaidyaai
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/1
@@ -89,10 +88,11 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: vaidyaai-worker-reports
     command: celery -A app.workers.celery_app worker -Q reports -c 2 -l INFO -n reports@%h
     environment:
       - DATABASE_URL=postgresql+asyncpg://vaidya:vaidya123@postgres:5432/vaidyaai
+      # FIX BUG 2: psycopg2 (sync) needs postgres hostname, not localhost
+      - DATABASE_SYNC_URL=postgresql://vaidya:vaidya123@postgres:5432/vaidyaai
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/1
@@ -111,7 +111,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: vaidyaai-flower
     command: celery -A app.workers.celery_app flower --port=5555
     ports:
       - "5555:5555"
@@ -127,13 +126,12 @@ services:
   # ── PostgreSQL ────────────────────────────────────────────────────────────
   postgres:
     image: postgres:15-alpine
-    container_name: vaidyaai-postgres
     environment:
       - POSTGRES_USER=vaidya
       - POSTGRES_PASSWORD=vaidya123
       - POSTGRES_DB=vaidyaai
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -148,9 +146,8 @@ services:
   # ── Redis ─────────────────────────────────────────────────────────────────
   redis:
     image: redis:7-alpine
-    container_name: vaidyaai-redis
     ports:
-      - "6379:6379"
+      - "6380:6379"
     volumes:
       - redis_data:/data
     healthcheck:

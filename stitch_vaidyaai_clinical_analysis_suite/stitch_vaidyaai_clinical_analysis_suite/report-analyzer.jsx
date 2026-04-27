@@ -74,7 +74,7 @@ function LabTable({ rows }) {
           </tr>
         </thead>
         <tbody>
-          {rows.map((r, i) => (
+          {rows?.map((r, i) => (
             <tr key={i} style={{ borderBottom: i < rows.length - 1 ? '1px solid var(--border)' : 'none' }}>
               <td style={{ padding: '9px 12px', fontWeight: 600, color: 'var(--text-primary)' }}>{r.name}</td>
               <td style={{ padding: '9px 12px', fontFamily: 'var(--font-mono)', color: FLAG_COLOR[r.flag] || 'var(--text-primary)', fontWeight: 700 }}>{r.value}</td>
@@ -135,7 +135,7 @@ function ReportAnalyzer() {
     setPhase('running'); setStep(0); setResult(null); setElapsed(0);
     timerRef.current = setInterval(() => setElapsed(e => e + 1), 1000);
 
-    const steps = REPORT_STEPS[reportType];
+    const steps = REPORT_STEPS[reportType] || [];
     let s = 0;
     const advance = () => {
       s++; setStep(s);
@@ -175,7 +175,33 @@ function ReportAnalyzer() {
           // Done — map to display format
           clearInterval(timerRef.current);
           setStep(steps.length);
-          setResult(data);
+          
+          const entities = data.extracted_entities || {};
+          const risk     = data.risk_score || 0;
+          
+          setResult({
+            status:      data.status || 'complete',
+            riskScore:   risk,
+            riskLabel:   risk > 80 ? 'High' : risk > 50 ? 'Moderate' : 'Low',
+            conditions:  entities.conditions || [],
+            medications: entities.medications || [],
+            labValues:   Object.entries(entities.lab_values || {}).map(([k, v]) => ({
+              name: k,
+              value: v?.value ?? v ?? '--',
+              ref: v?.ref || '--',
+              flag: v?.flag || 'NORMAL'
+            })),
+            anomalies:   data.anomalies || [],
+            shap:        (data.risk_factors || data.shap_values || []).map(f => ({ 
+              factor: f?.feature || f?.factor || 'Unknown', 
+              score: f?.shap ?? f?.score ?? 0 
+            })),
+            citations:   (data.sources || data.source_citations || []).map(s => ({
+              title:  s.title || s.source_id || 'Evidence',
+              source: s.source || s.url || '',
+              snippet: s.snippet || s.excerpt || ''
+            })),
+          });
           setPhase('done');
         } catch (err) {
           console.error('Poll error:', err);
@@ -196,7 +222,7 @@ function ReportAnalyzer() {
     setPhase('idle'); setFile(null); setFileError(''); setStep(0); setResult(null); setElapsed(0);
   };
 
-  const steps = REPORT_STEPS[reportType];
+  const steps = REPORT_STEPS[reportType] || [];
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
@@ -267,10 +293,10 @@ function ReportAnalyzer() {
                 <div style={{ marginTop: '14px' }}>
                   <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '8px' }}>Active Conditions</div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                    {result.conditions.map((c, i) => <EntityChip key={i} label={c} type="condition" />)}
+                    {result.conditions?.map((c, i) => <EntityChip key={i} label={c} type="condition" />)}
                   </div>
                   <div style={{ marginTop: '10px', display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                    {result.medications.map((m, i) => <EntityChip key={i} label={m} type="medication" />)}
+                    {result.medications?.map((m, i) => <EntityChip key={i} label={m} type="medication" />)}
                   </div>
                 </div>
               </div>
@@ -286,7 +312,7 @@ function ReportAnalyzer() {
             <Card style={{ flex: 1, minWidth: '240px' }}>
               <SectionLabel>Anomalies Detected</SectionLabel>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                {result.anomalies.map((a, i) => (
+                {result.anomalies?.map((a, i) => (
                   <div key={i} style={{ display: 'flex', gap: '10px', padding: '10px', background: 'oklch(0.65 0.20 25 / 0.07)', borderRadius: '6px', border: '1px solid oklch(0.65 0.20 25 / 0.25)' }}>
                     <span style={{ color: 'oklch(0.65 0.20 25)', fontSize: '13px', flexShrink: 0 }}>▲</span>
                     <span style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>{a}</span>
@@ -296,7 +322,7 @@ function ReportAnalyzer() {
             </Card>
             <Card style={{ flex: 1, minWidth: '240px' }}>
               <SectionLabel>SHAP Top Factors</SectionLabel>
-              {result.shap.map((s, i) => <ShapRow key={i} factor={s.factor} score={s.score} />)}
+              {result.shap?.map((s, i) => <ShapRow key={i} factor={s.factor} score={s.score} />)}
             </Card>
           </div>
 

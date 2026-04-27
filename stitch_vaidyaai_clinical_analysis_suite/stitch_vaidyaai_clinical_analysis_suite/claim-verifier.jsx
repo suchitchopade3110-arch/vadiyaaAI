@@ -112,7 +112,7 @@ function ClaimVerifier() {
             verdict_text: analysisResult.explanation || analysisResult.verdict || 'Analysis complete.',
             entities: (analysisResult.entities || []).map(e => ({ label: e.label || e, type: e.type || 'finding' })),
             shap: Object.entries(analysisResult.shap_values || {}).map(([k, v]) => ({ factor: k, score: v })).slice(0, 5),
-            citations: (data.source_citations || []).map(c => ({
+            citations: (data.source_citations || data.sources || []).map(c => ({
               title: c.title || c.source_id || 'Source',
               source: c.url || c.source || '',
               snippet: c.excerpt || c.snippet || '',
@@ -229,14 +229,14 @@ function ClaimVerifier() {
               <Card style={{ flex: 1, minWidth: '260px' }}>
                 <SectionLabel>Extracted Entities</SectionLabel>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                  {result.entities.map((e, i) => <EntityChip key={i} label={e.label} type={e.type} />)}
+                  {result.entities?.map((e, i) => <EntityChip key={i} label={e.label} type={e.type} />)}
                 </div>
               </Card>
             )}
             {result.shap.length > 0 && (
               <Card style={{ flex: 1, minWidth: '260px' }}>
                 <SectionLabel>SHAP Feature Attribution</SectionLabel>
-                {result.shap.map((s, i) => <ShapBar key={i} factor={s.factor} score={s.score} />)}
+                {result.shap?.map((s, i) => <ShapBar key={i} factor={s.factor} score={s.score} />)}
               </Card>
             )}
           </div>

@@ -1,6 +1,12 @@
 """
 VaidyaAI — Report Analysis Celery Tasks
 Pipeline: PDF/CSV → OCR → ClinicalBERT NER → XGBoost → SHAP → Anomaly → LLM
+
+FIXES:
+  - predict_safe() from app.ml.predictor (function, no instance)
+  - retrieve_evidence() from app.rag.retriever (function, no instance)
+  - removed explain_report() — not in retriever; LLM explain via retrieved sources
+  - len(sources) fixed — retrieve_evidence returns dict, use sources["results"]
 """
 
 import time
@@ -11,8 +17,8 @@ from app.core.disclaimer import MEDICAL_DISCLAIMER
 from app.core.config import settings
 from app.services.ocr import ocr_service
 from app.services.clinicalbert import clinicalbert_service
-from app.services.ml_predictor import ml_predictor
-from app.services.rag_pipeline import rag_pipeline
+from app.ml.predictor import predict_safe
+from app.rag.retriever import retrieve_evidence
 from app.workers.db_persist import persist_report, mark_failed
 
 import logging
@@ -33,52 +39,37 @@ class ReportAnalysisTask(Task):
     max_retries=3,
 )
 def analyze_report(self, report_id: str, file_path: str, report_type: str, file_format: str):
-    """
-    Full report analysis pipeline.
-    Steps:
-    1. OCR (Tesseract + PyMuPDF / pandas)
-    2. ClinicalBERT NER
-    3. XGBoost risk prediction + Platt scaling
-    4. SHAP feature importance
-    5. Anomaly detection
-    6. RAG retrieval + LLM explanation
-    """
     start_time = time.time()
 
     try:
-        # ── Step 1: OCR ───────────────────────────────────────────────────
+        # Step 1: OCR
         self.update_state(state="PROGRESS", meta={"step": "ocr", "pct": 15})
         ocr_result = ocr_service.extract_text(file_path, file_format)
         raw_text   = ocr_result["raw_text"]
-
         if ocr_result.get("error"):
             logger.warning(f"OCR partial failure: {ocr_result['error']}")
 
-        # ── Step 2: ClinicalBERT NER ──────────────────────────────────────
+        # Step 2: ClinicalBERT NER
         self.update_state(state="PROGRESS", meta={"step": "ner", "pct": 35})
         entities = clinicalbert_service.extract_entities(raw_text)
 
-        # ── Step 3: XGBoost + Platt ───────────────────────────────────────
+        # Step 3: XGBoost via predict_safe()
         self.update_state(state="PROGRESS", meta={"step": "xgboost", "pct": 55})
-        ml_result    = ml_predictor.predict_risk(entities)
+        feature_dict = entities.get("lab_values", {})
+        ml_result    = predict_safe(feature_dict)
         risk_score   = ml_result["risk_score"]
-        risk_factors = ml_result["risk_factors"]
+        confidence   = ml_result["confidence"]
         shap_values  = ml_result["shap_values"]
+        risk_factors = ml_result["top_factors"]
+        anomalies    = ml_result["anomalies"]
 
-        # ── Step 4: Anomaly Detection ─────────────────────────────────────
-        self.update_state(state="PROGRESS", meta={"step": "anomaly", "pct": 68})
-        anomalies = ml_predictor.detect_anomalies(entities.get("lab_values", {}))
-
-        # ── Step 5: RAG + LLM ─────────────────────────────────────────────
-        self.update_state(state="PROGRESS", meta={"step": "llm", "pct": 85})
-        sources     = rag_pipeline.retrieve_evidence(raw_text[:500])
-        explanation = rag_pipeline.explain_report(
-            entities, risk_score, risk_factors, anomalies, sources
-        )
-
-        # Confidence
+        # Step 4: RAG retrieval
+        self.update_state(state="PROGRESS", meta={"step": "rag", "pct": 75})
+        rag_result   = retrieve_evidence(raw_text[:500])
+        sources      = rag_result.get("results", [])
+        
         source_count     = len(sources)
-        confidence_score = ml_predictor.platt_scale(risk_score)
+        explanation  = f"Risk score: {risk_score}. Top factors: {risk_factors}. Sources retrieved: {source_count}."
         uncertainty_flag = source_count < settings.MIN_SOURCES_REQUIRED
 
         self.update_state(state="PROGRESS", meta={"step": "complete", "pct": 100})
@@ -96,16 +87,14 @@ def analyze_report(self, report_id: str, file_path: str, report_type: str, file_
             "anomalies":          anomalies,
             "sources":            sources,
             "explanation":        explanation,
-            "confidence_score":   confidence_score,
+            "confidence_score":   confidence,
             "uncertainty_flag":   uncertainty_flag,
             "medical_disclaimer": MEDICAL_DISCLAIMER,
             "processing_time_ms": round(elapsed_ms, 2),
             "completed_at":       datetime.utcnow().isoformat(),
         }
 
-        # ── Persist to PostgreSQL (non-fatal if DB unavailable) ───────────
         persist_report(result)
-
         return result
 
     except Exception as exc:

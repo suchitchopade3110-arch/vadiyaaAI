@@ -40,10 +40,11 @@ pandas==2.2.2
 numpy==1.26.4
 
 # ── ML (Phase 1: install only; Phase 2: wire into pipeline) ──────────────────
-scikit-learn==1.4.2
+scikit-learn==1.6.1
 xgboost==2.0.3
-torch==2.3.0                     # PyTorch (CPU; Phase 2: GPU)
-# torchvision==0.18.0            # Uncomment Phase 2 (CheXNet)
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.3.0+cpu
+torchvision==0.18.0+cpu
 
 # ── NLP / LLM (Phase 1: install only; Phase 2: wire) ─────────────────────────
 transformers==4.41.1             # ClinicalBERT, BioGPT
@@ -53,7 +54,7 @@ chromadb==0.5.0
 
 # ── Explainability (Phase 2) ──────────────────────────────────────────────────
 shap==0.45.1
-# grad-cam==1.4.8                # Uncomment Phase 2
+grad-cam==1.4.8                # For image heatmaps
 
 # ── OpenAI (Phase 2: LLM reasoning) ──────────────────────────────────────────
 openai==1.30.1

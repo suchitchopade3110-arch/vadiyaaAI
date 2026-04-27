@@ -12,6 +12,7 @@ class ReportTypeEnum(str, Enum):
 class ReportAsyncResponse(BaseResponse):
     report_id: UUID
     task_id: str
+    id: str  # Added for frontend compatibility
     status: str = "pending"
     report_type: ReportTypeEnum
     poll_url: str

@@ -19,9 +19,8 @@ from app.workers.db_persist import insert_claim
 router = APIRouter()
 
 
-@router.post("/claim/{claim_id}", response_model=ClaimAsyncResponse, status_code=202)
+@router.post("/claim", response_model=ClaimAsyncResponse, status_code=202)
 async def submit_claim(
-    claim_id: str,
     payload: ClaimRequest,
     db: AsyncSession = Depends(get_db),
 ):
@@ -35,12 +34,14 @@ async def submit_claim(
     """
     request_id = str(uuid.uuid4())
 
+    # Generate a claim_id since the frontend doesn't provide one
+    claim_id = str(uuid.uuid4())
+
     # ── Dispatch Celery task ───────────────────────────────────────────────
     task = verify_claim.apply_async(
         args=[claim_id, payload.claim_text],
         kwargs={"patient_id": str(payload.patient_id) if payload.patient_id else None},
         priority=9 if payload.priority == "high" else 5,
-        queue="claims",
     )
 
     # ── Insert pending row in DB ───────────────────────────────────────────
@@ -49,13 +50,31 @@ async def submit_claim(
 
     return ClaimAsyncResponse(
         request_id=request_id,
-        claim_id=uuid.UUID(claim_id) if _is_valid_uuid(claim_id) else uuid.uuid4(),
+        claim_id=uuid.UUID(claim_id),
         task_id=task.id,
+        id=task.id,  # Frontend expects 'id'
         status="pending",
-        poll_url=f"/api/v1/verify/claim/status/{task.id}",
+        poll_url=f"/api/v1/verify/claim/{task.id}",
         estimated_seconds=15,
         medical_disclaimer=MEDICAL_DISCLAIMER,
     )
+
+
+@router.get("/claim/{task_id}")
+async def get_claim_combined(task_id: str):
+    """Combined status and result endpoint for the frontend."""
+    result = AsyncResult(task_id)
+    state = result.state
+
+    if state == "SUCCESS":
+        return result.result
+    
+    # Return status format the frontend understands
+    return {
+        "status": state.lower(),
+        "task_id": task_id,
+        "id": task_id
+    }
 
 
 @router.get("/claim/status/{task_id}", response_model=JobStatus)
