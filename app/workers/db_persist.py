@@ -41,12 +41,12 @@ def persist_claim(result: dict) -> bool:
                 source_count           = %s,
                 verdict                = %s,
                 explanation            = %s,
-                confidence_score       = %s,
+                confidence             = %s,
                 uncertainty_flag       = %s,
                 hallucination_detected = %s,
                 hallucination_details  = %s,
                 shap_values            = %s,
-                medical_disclaimer     = %s,
+                disclaimer             = %s,
                 completed_at           = %s
             WHERE id = %s
         """, (
@@ -148,9 +148,9 @@ def persist_image_analysis(result: dict) -> bool:
             UPDATE image_analyses SET
                 status                   = %s,
                 dicom_metadata           = %s,
-                segmentation_mask        = %s,
+                segmentation_mask_path   = %s,
                 segmentation_overlay     = %s,
-                roi_bounding_box         = %s,
+                roi_metadata             = %s,
                 segmentation_confidence  = %s,
                 classification           = %s,
                 classification_probs     = %s,
@@ -158,7 +158,7 @@ def persist_image_analysis(result: dict) -> bool:
                 gradcam_regions          = %s,
                 explanation              = %s,
                 retrieved_sources        = %s,
-                confidence_score         = %s,
+                confidence               = %s,
                 uncertainty_flag         = %s,
                 anomaly_detected         = %s,
                 medical_disclaimer       = %s,

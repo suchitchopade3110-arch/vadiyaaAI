@@ -33,6 +33,7 @@ class Claim(Base):
     verdict: Mapped[str] = mapped_column(String(20), nullable=True)
     explanation: Mapped[str] = mapped_column(Text, nullable=True)
     shap_values: Mapped[dict] = mapped_column(JSON, nullable=True)
+    retrieved_sources: Mapped[list] = mapped_column(JSON, nullable=True)
     disclaimer: Mapped[str] = mapped_column(Text, nullable=True)
     uncertainty_flag: Mapped[bool] = mapped_column(Boolean, default=False)
     hallucination_detected: Mapped[bool] = mapped_column(Boolean, default=False)

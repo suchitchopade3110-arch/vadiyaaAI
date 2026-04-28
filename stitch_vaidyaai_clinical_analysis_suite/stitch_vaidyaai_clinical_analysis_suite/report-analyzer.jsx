@@ -3,6 +3,7 @@
 // report-analyzer.jsx — Report Analyzer page
 
 const { useState, useRef } = React;
+const API_BASE = '/api/v1';
 
 const REPORT_STEPS = {
   lab:      [
@@ -159,15 +160,19 @@ function ReportAnalyzer() {
       }
 
       const submitData = await submitRes.json();
-      const reportId = submitData.id;
+      const reportId = submitData.id || submitData.task_id;
+      console.log('[ReportAnalyzer] Submit response:', submitData);
+      console.log('[ReportAnalyzer] Polling with reportId:', reportId);
 
       // Poll for result
       const poll = async () => {
         try {
-          const pollRes = await fetch(`${API_BASE || '/api/v1'}/analyze/report/${reportId}`);
+          const pollRes = await fetch(`${API_BASE}/analyze/report/${reportId}`);
           const data = await pollRes.json();
+          console.log('[ReportAnalyzer] Poll response:', data);
           
-          if (data.status === 'PROCESSING' || data.status === 'PENDING' || data.status === 'processing' || data.status === 'pending') {
+          const st = (data.status || '').toLowerCase();
+          if (st === 'pending' || st === 'processing' || st === 'progress' || st === 'started') {
             setTimeout(poll, 2000);
             return;
           }
