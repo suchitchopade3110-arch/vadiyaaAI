@@ -97,12 +97,11 @@ def predict_safe(feature_dict: dict) -> dict:
     # PHASE 1 STUB — bypass sklearn version mismatch
     return {
         "risk_score": 65.0,
-        "risk_factors": [
+        "top_factors": [
             {"feature": "WBC", "shap": 2.1},
             {"feature": "cholesterol", "shap": 1.8},
-            {"feature": "glucose", "shap": 1.2}
         ],
-        "shap_values": {"WBC": 2.1, "cholesterol": 1.8, "glucose": 1.2},
+        "shap_values": {"WBC": 2.1, "cholesterol": 1.8},
         "confidence": 0.65,
         "uncertainty_flag": False,
         "anomalies": []

@@ -24,10 +24,10 @@ class ImageAnalysis(Base):
     patient_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("patients.id"), nullable=True
     )
-    image_type: Mapped[ImageType] = mapped_column(Enum(ImageType), nullable=False)
+    image_type: Mapped[str] = mapped_column(String, nullable=True)
     file_path: Mapped[str] = mapped_column(String(500), nullable=True)
     file_format: Mapped[str] = mapped_column(String(10), nullable=True)
-    status: Mapped[AnalysisStatus] = mapped_column(Enum(AnalysisStatus), default=AnalysisStatus.PENDING)
+    status: Mapped[str] = mapped_column(String, default="PENDING")
     dicom_metadata: Mapped[dict] = mapped_column(JSON, nullable=True)
     segmentation_mask_path: Mapped[str] = mapped_column(String(500), nullable=True)  # MedSAM output
     segmentation_overlay: Mapped[str] = mapped_column(String(500), nullable=True)

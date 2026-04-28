@@ -25,9 +25,7 @@ class Claim(Base):
         UUID(as_uuid=True), ForeignKey("patients.id"), nullable=True
     )
     claim_text: Mapped[str] = mapped_column(Text, nullable=False)
-    status: Mapped[ClaimStatus] = mapped_column(
-        Enum(ClaimStatus), default=ClaimStatus.PENDING
-    )
+    status: Mapped[str] = mapped_column(String, default="PENDING")
     confidence: Mapped[float] = mapped_column(Float, nullable=True)  # 0–100 Platt-scaled
     extracted_entities: Mapped[dict] = mapped_column(JSON, nullable=True)   # ClinicalBERT output
     source_citations: Mapped[list] = mapped_column(JSON, nullable=True)     # ChromaDB hits

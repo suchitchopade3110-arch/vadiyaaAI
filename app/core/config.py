@@ -16,8 +16,8 @@ class Settings(BaseSettings):
     ]
 
     # PostgreSQL
-    POSTGRES_HOST: str = "postgres"
-    POSTGRES_PORT: int = 5432
+    POSTGRES_HOST: str = "localhost"
+    POSTGRES_PORT: int = 5433
     POSTGRES_DB: str = "vaidyaai"
     POSTGRES_USER: str = "vaidya"
     POSTGRES_PASSWORD: str = "vaidya123"
@@ -30,9 +30,9 @@ class Settings(BaseSettings):
         )
 
     # Redis / Celery
-    REDIS_URL: str = "redis://redis:6379/0"
-    CELERY_BROKER_URL: str = "redis://redis:6379/0"
-    CELERY_RESULT_BACKEND: str = "redis://redis:6379/1"
+    REDIS_URL: str = "redis://localhost:6380/0"
+    CELERY_BROKER_URL: str = "redis://localhost:6380/0"
+    CELERY_RESULT_BACKEND: str = "redis://localhost:6380/1"
 
     # LLM
     OPENAI_API_KEY: str = ""
@@ -44,7 +44,7 @@ class Settings(BaseSettings):
 
     # File upload
     MAX_UPLOAD_SIZE_MB: int = 50
-    UPLOAD_DIR: str = "/tmp/vaidyaai/uploads"
+    UPLOAD_DIR: str = "./uploads"
 
     # Safety
     CONFIDENCE_THRESHOLD: float = 0.65  # below → "Insufficient evidence"
@@ -69,3 +69,6 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+
+

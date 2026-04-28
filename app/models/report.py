@@ -27,10 +27,10 @@ class Report(Base):
     patient_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("patients.id"), nullable=True
     )
-    report_type: Mapped[ReportType] = mapped_column(Enum(ReportType), nullable=False)
+    report_type: Mapped[str] = mapped_column(String, nullable=True)
     file_path: Mapped[str] = mapped_column(String(500), nullable=True)
     file_format: Mapped[str] = mapped_column(String(10), nullable=True)
-    status: Mapped[AnalysisStatus] = mapped_column(Enum(AnalysisStatus), default=AnalysisStatus.PENDING)
+    status: Mapped[str] = mapped_column(String, default="PENDING")
     raw_text: Mapped[str] = mapped_column(Text, nullable=True)       # OCR output
     parsed_data: Mapped[dict] = mapped_column(JSON, nullable=True)     # ClinicalBERT structured
     risk_score: Mapped[float] = mapped_column(Float, nullable=True)

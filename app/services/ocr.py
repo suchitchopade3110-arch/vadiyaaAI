@@ -73,12 +73,11 @@ class OCRService:
             all_text = []
 
             for page_num, page in enumerate(doc):
-                # Render page at 300 DPI for good OCR accuracy
-                mat = fitz.Matrix(300 / 72, 300 / 72)
+                mat = fitz.Matrix(3, 3)  # 216 DPI — better for OCR
                 pix = page.get_pixmap(matrix=mat)
                 img_bytes = pix.tobytes("png")
                 img = Image.open(io.BytesIO(img_bytes))
-                text = pytesseract.image_to_string(img, lang="eng")
+                text = pytesseract.image_to_string(img, lang="eng", config="--psm 6 --oem 3")
                 all_text.append(text)
 
             doc.close()

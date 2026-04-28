@@ -157,13 +157,29 @@ def retrieve_evidence(query: str, top_k: int = TOP_K_DEFAULT) -> dict:
     """
     try:
         collection = _load_collection()
-    except FileNotFoundError as e:
-        log.error(str(e))
-        return {"error": str(e), "query": query, "results": [], "count": 0}
+    except (FileNotFoundError, Exception) as e:
+        log.error(f"ChromaDB load failed: {e}")
+        return {
+            "results": [],
+            "sources": [],
+            "source_count": 0,
+            "retrieved_context": "",
+            "uncertainty_flag": True
+        }
 
-    total_docs = collection.count()
+    try:
+        total_docs = collection.count()
+    except Exception:
+        total_docs = 0
+
     if total_docs == 0:
-        return {"error": "ChromaDB collection is empty", "query": query, "results": [], "count": 0}
+        return {
+            "results": [],
+            "sources": [],
+            "source_count": 0,
+            "retrieved_context": "",
+            "uncertainty_flag": True
+        }
 
     query_embedding = embed_texts([query], batch_size=1)[0]
     candidate_k     = min(max(top_k * 4, 12), total_docs)

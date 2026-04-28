@@ -89,7 +89,7 @@ async def list_recent_jobs(
             job_id=str(r.id),
             pipeline="report",
             celery_task_id=r.celery_task_id,
-            status=str(r.uncertainty_flag),  # placeholder until report has status col
+            status=r.status if isinstance(r.status, str) else r.status.value,
             created_at=r.created_at,
         ))
 
@@ -100,9 +100,9 @@ async def list_recent_jobs(
     for img in images_result.scalars().all():
         jobs.append(RecentJobItem(
             job_id=str(img.id),
-            pipeline=f"image/{img.image_type.value}",
+            pipeline=f"image/{img.image_type if isinstance(img.image_type, str) else img.image_type.value}",
             celery_task_id=img.celery_task_id,
-            status="processing" if img.celery_task_id else "pending",
+            status=img.status if isinstance(img.status, str) else img.status.value,
             created_at=img.created_at,
         ))
 
@@ -115,7 +115,7 @@ async def list_recent_jobs(
             job_id=str(c.id),
             pipeline="claim",
             celery_task_id=c.celery_task_id,
-            status=c.status.value,
+            status=c.status if isinstance(c.status, str) else c.status.value,
             created_at=c.created_at,
         ))
 
