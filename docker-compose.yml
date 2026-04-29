@@ -17,7 +17,8 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - DATABASE_URL=postgresql+asyncpg://vaidya:vaidya123@postgres:5432/vaidyaai
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/1
@@ -42,9 +43,8 @@ services:
       dockerfile: Dockerfile
     command: celery -A app.workers.celery_app worker -Q claims -c 4 -l INFO -n claims@%h
     environment:
-      - DATABASE_URL=postgresql+asyncpg://vaidya:vaidya123@postgres:5432/vaidyaai
-      # FIX BUG 2: psycopg2 (sync) needs postgres hostname, not localhost
-      - DATABASE_SYNC_URL=postgresql://vaidya:vaidya123@postgres:5432/vaidyaai
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/1
@@ -67,9 +67,8 @@ services:
     # NOTE: Set -c 1 for image workers — MedSAM is GPU/memory intensive
     # Phase 2: Add GPU support: runtime: nvidia + device_requests
     environment:
-      - DATABASE_URL=postgresql+asyncpg://vaidya:vaidya123@postgres:5432/vaidyaai
-      # FIX BUG 2: psycopg2 (sync) needs postgres hostname, not localhost
-      - DATABASE_SYNC_URL=postgresql://vaidya:vaidya123@postgres:5432/vaidyaai
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/1
@@ -90,9 +89,8 @@ services:
       dockerfile: Dockerfile
     command: celery -A app.workers.celery_app worker -Q reports -c 2 -l INFO -n reports@%h
     environment:
-      - DATABASE_URL=postgresql+asyncpg://vaidya:vaidya123@postgres:5432/vaidyaai
-      # FIX BUG 2: psycopg2 (sync) needs postgres hostname, not localhost
-      - DATABASE_SYNC_URL=postgresql://vaidya:vaidya123@postgres:5432/vaidyaai
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/1

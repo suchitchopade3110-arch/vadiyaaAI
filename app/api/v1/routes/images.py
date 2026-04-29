@@ -9,6 +9,7 @@ from app.schemas.image import ImageAsyncResponse, AnalysisType
 from app.schemas.job import JobStatus
 from app.services.file_upload import file_upload_service
 from app.workers.image_tasks import analyze_image
+from app.workers.celery_app import celery_app
 from app.core.disclaimer import MEDICAL_DISCLAIMER
 
 router = APIRouter()
@@ -66,7 +67,7 @@ async def submit_image_analysis(
 @router.get("/{task_id}")
 async def get_image_combined(task_id: str):
     """Combined status and result endpoint for the frontend."""
-    result = AsyncResult(task_id)
+    result = AsyncResult(task_id, app=celery_app)
     state = result.state
 
     if state == "SUCCESS":
@@ -94,7 +95,7 @@ async def get_image_status_or_result(analysis_id: uuid.UUID, db: AsyncSession = 
     
     if image_record.status.value in ["pending", "processing"]:
         if image_record.celery_task_id:
-            result = AsyncResult(image_record.celery_task_id)
+            result = AsyncResult(image_record.celery_task_id, app=celery_app)
             state = result.state
             meta = result.info or {}
             

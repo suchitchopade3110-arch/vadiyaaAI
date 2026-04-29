@@ -21,20 +21,62 @@ ChromaDB path: set via env var CHROMA_PATH
 import logging
 import os
 import re
+import sqlite3
 from datetime import UTC, datetime
+from pathlib import Path
 
 import chromadb
 import numpy as np
 import torch
 from transformers import BioGptModel, BioGptTokenizer
 
+try:
+    import chromadb.segment.impl.metadata.sqlite as chroma_sqlite
+    import chromadb.segment.impl.vector.local_persistent_hnsw as chroma_hnsw
+
+    _original_decode_seq_id = chroma_sqlite._decode_seq_id
+    _original_load_hnsw_metadata = chroma_hnsw.PersistentData.load_from_file
+
+    def _decode_seq_id_compat(seq_id):
+        if isinstance(seq_id, int):
+            return seq_id
+        return _original_decode_seq_id(seq_id)
+
+    def _load_hnsw_metadata_compat(filename):
+        data = _original_load_hnsw_metadata(filename)
+        if isinstance(data, dict):
+            dimensionality = data.get("dimensionality")
+            if dimensionality is None:
+                sqlite_path = Path(filename).resolve().parent.parent / "chroma.sqlite3"
+                with sqlite3.connect(sqlite_path) as conn:
+                    row = conn.execute(
+                        "SELECT vector FROM embeddings_queue WHERE vector IS NOT NULL LIMIT 1"
+                    ).fetchone()
+                if row and row[0]:
+                    dimensionality = len(row[0]) // 4
+
+            return chroma_hnsw.PersistentData(
+                dimensionality=dimensionality,
+                total_elements_added=data.get("total_elements_added", 0),
+                max_seq_id=data.get("max_seq_id"),
+                id_to_label=data.get("id_to_label", {}),
+                label_to_id=data.get("label_to_id", {}),
+                id_to_seq_id=data.get("id_to_seq_id", {}),
+            )
+        return data
+
+    chroma_sqlite._decode_seq_id = _decode_seq_id_compat
+    chroma_hnsw.PersistentData.load_from_file = staticmethod(_load_hnsw_metadata_compat)
+except Exception:
+    pass
+
 log = logging.getLogger(__name__)
 
 # ── Config from env ───────────────────────────────────────────────────────────
-CHROMA_PATH = os.getenv(
+CHROMA_PATH = os.path.abspath(os.path.expanduser(os.getenv(
     "CHROMA_PATH",
     os.path.expanduser("~/vaidyaAI_week1_clean/chromadb")
-)
+)))
 CHROMA_COLLECTION = os.getenv("CHROMA_COLLECTION", "medical_evidence_week1_clean")
 BIOGPT_MODEL_ID   = os.getenv("BIOGPT_MODEL_ID", "microsoft/biogpt")
 

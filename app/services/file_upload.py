@@ -32,8 +32,8 @@ class FileUploadService:
     """Validate + persist uploaded medical files."""
 
     def __init__(self):
-        # Fallback to a local uploads dir if settings.UPLOAD_DIR doesn't exist
-        self.upload_dir = Path(getattr(settings, "UPLOAD_DIR", "uploads"))
+        # Resolve once so API and worker receive an absolute, stable file path.
+        self.upload_dir = Path(getattr(settings, "UPLOAD_DIR", "uploads")).expanduser().resolve()
         self.upload_dir.mkdir(parents=True, exist_ok=True)
         self.max_bytes = getattr(settings, "MAX_FILE_SIZE_MB", 50) * 1024 * 1024
         self.allowed_extensions = getattr(settings, "ALLOWED_EXTENSIONS", ["pdf", "csv", "dcm", "jpg", "jpeg", "png"])

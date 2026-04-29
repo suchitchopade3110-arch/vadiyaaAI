@@ -13,6 +13,7 @@ from app.schemas.report import ReportAsyncResponse, ReportTypeEnum
 from app.schemas.job import JobStatus
 from app.services.file_upload import file_upload_service
 from app.workers.report_tasks import analyze_report
+from app.workers.celery_app import celery_app
 from app.core.disclaimer import MEDICAL_DISCLAIMER
 from app.workers.db_persist import insert_report
 
@@ -83,7 +84,7 @@ async def submit_report_analysis(
 @router.get("/{task_id}")
 async def get_report_combined(task_id: str):
     """Combined status and result endpoint for the frontend."""
-    result = AsyncResult(task_id)
+    result = AsyncResult(task_id, app=celery_app)
     state = result.state
 
     if state == "SUCCESS":
@@ -100,7 +101,7 @@ async def get_report_combined(task_id: str):
 async def get_report_status(task_id: str):
     """Poll report analysis job status."""
     request_id = str(uuid.uuid4())
-    result = AsyncResult(task_id)
+    result = AsyncResult(task_id, app=celery_app)
     state = result.state
     meta = result.info or {}
 
@@ -125,7 +126,7 @@ async def get_report_status(task_id: str):
 @router.get("/report/result/{task_id}")
 async def get_report_result(task_id: str):
     """Retrieve completed report analysis result."""
-    result = AsyncResult(task_id)
+    result = AsyncResult(task_id, app=celery_app)
     if result.state != "SUCCESS":
         raise HTTPException(
             status_code=status.HTTP_425_TOO_EARLY,

@@ -17,7 +17,7 @@ def save_upload(raw: bytes, original_filename: str, subfolder: str) -> str:
     """
     ext = Path(original_filename).suffix.lower()
     safe_name = f"{uuid.uuid4().hex}{ext}"
-    dest_dir = Path(settings.UPLOAD_DIR) / subfolder
+    dest_dir = Path(settings.UPLOAD_DIR).expanduser().resolve() / subfolder
     dest_dir.mkdir(parents=True, exist_ok=True)
 
     dest_path = dest_dir / safe_name

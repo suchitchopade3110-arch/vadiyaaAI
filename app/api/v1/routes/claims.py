@@ -13,6 +13,7 @@ from app.db.session import get_db
 from app.schemas.claim import ClaimRequest, ClaimAsyncResponse, ClaimResult
 from app.schemas.job import JobStatus
 from app.workers.claim_tasks import verify_claim
+from app.workers.celery_app import celery_app
 from app.core.disclaimer import MEDICAL_DISCLAIMER
 from app.workers.db_persist import insert_claim
 
@@ -63,7 +64,7 @@ async def submit_claim(
 @router.get("/claim/{task_id}")
 async def get_claim_combined(task_id: str):
     """Combined status and result endpoint for the frontend."""
-    result = AsyncResult(task_id)
+    result = AsyncResult(task_id, app=celery_app)
     state = result.state
 
     if state == "SUCCESS":
@@ -81,7 +82,7 @@ async def get_claim_combined(task_id: str):
 async def get_claim_status(task_id: str):
     """Poll claim verification job status."""
     request_id = str(uuid.uuid4())
-    result = AsyncResult(task_id)
+    result = AsyncResult(task_id, app=celery_app)
 
     state = result.state
     meta = result.info or {}
@@ -116,7 +117,7 @@ async def get_claim_status(task_id: str):
 @router.get("/claim/result/{task_id}")
 async def get_claim_result(task_id: str):
     """Retrieve completed claim verification result."""
-    result = AsyncResult(task_id)
+    result = AsyncResult(task_id, app=celery_app)
     
     if result.state != "SUCCESS":
         raise HTTPException(
