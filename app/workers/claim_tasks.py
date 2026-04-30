@@ -4,7 +4,7 @@ Pipeline: ClinicalBERT NER → BioGPT → ChromaDB → GPT-4/Llama → Hallucina
 """
 
 import time
-from datetime import datetime
+from datetime import UTC, datetime
 from celery import Task
 from app.workers.celery_app import celery_app
 from app.core.disclaimer import MEDICAL_DISCLAIMER
@@ -51,7 +51,30 @@ def verify_claim(self, claim_id: str, claim_text: str, patient_id: str = None):
 
         # ── Step 2: BioGPT → ChromaDB ─────────────────────────────────────
         self.update_state(state="PROGRESS", meta={"step": "rag", "pct": 30})
-        sources = rag_pipeline.retrieve_evidence(claim_text)
+        from app.services.intelligence.rag_retrieval import retrieve_evidence
+        evidence = retrieve_evidence(claim_text)
+        sources = evidence["results"]
+
+        if not evidence["sufficient"]:
+            result = {
+                "claim_id":              claim_id,
+                "status":                "complete",
+                "extracted_entities":    entities,
+                "verdict":               "Uncertain",
+                "explanation":           "Insufficient evidence. Fewer than 2 sources retrieved.",
+                "sources":               sources,
+                "source_count":          evidence["count"],
+                "confidence_score":      0.0,
+                "uncertainty_flag":      True,
+                "hallucination_detected": False,
+                "hallucination_details": {},
+                "shap_values":           {},
+                "medical_disclaimer":    MEDICAL_DISCLAIMER,
+                "processing_time_ms":    round((time.time() - start_time) * 1000, 2),
+                "completed_at":          datetime.now(UTC).isoformat(),
+            }
+            persist_claim(result)
+            return result
 
         # ── Step 3: LLM Reasoning ─────────────────────────────────────────
         self.update_state(state="PROGRESS", meta={"step": "llm", "pct": 60})
@@ -90,7 +113,7 @@ def verify_claim(self, claim_id: str, claim_text: str, patient_id: str = None):
             "shap_values":           {},
             "medical_disclaimer":    MEDICAL_DISCLAIMER,
             "processing_time_ms":    round(elapsed_ms, 2),
-            "completed_at":          datetime.utcnow().isoformat(),
+            "completed_at":          datetime.now(UTC).isoformat(),
         }
 
         # ── Persist to PostgreSQL (non-fatal if DB unavailable) ───────────
@@ -106,7 +129,8 @@ def verify_claim(self, claim_id: str, claim_text: str, patient_id: str = None):
 
 def _score(verdict: str, source_count: int) -> float:
     """Stub confidence — Platt scaling in Phase 2."""
-    if source_count < 2:    return 15.0
-    if verdict == "verified": return 75.0
-    if verdict == "refuted":  return 70.0
-    return 20.0
+    from app.utils.confidence import platt_scale
+    if source_count < 2:    return platt_scale(0.15)
+    if verdict == "verified": return platt_scale(0.75)
+    if verdict == "refuted":  return platt_scale(0.70)
+    return platt_scale(0.20)

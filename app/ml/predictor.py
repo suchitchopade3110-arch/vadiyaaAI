@@ -94,30 +94,35 @@ def predict_safe(feature_dict: dict) -> dict:
 
     CALLED BY: app/workers/tasks_ml.py → run_ml_pipeline()
     """
-    # PHASE 1 STUB — bypass sklearn version mismatch
-    return {
-        "risk_score": 65.0,
-        "top_factors": [
-            {"feature": "WBC", "shap": 2.1},
-            {"feature": "cholesterol", "shap": 1.8},
-        ],
-        "shap_values": {"WBC": 2.1, "cholesterol": 1.8},
-        "confidence": 0.65,
-        "uncertainty_flag": False,
-        "anomalies": []
-    }
+    # PHASE 1 STUB — removed to enable XGBoost and real SHAP
+    pass
 
     model, scaler, explainer = _load_models()
 
-    # ── Build feature vector in correct order ─────────────────────────────────
-    feature_vector = [float(feature_dict.get(f, 0.0)) for f in FEATURE_ORDER]
+    # ── Normalize features and apply Fix 3 (SHAP Glucose Deviation) ───────────
+    normalized_features = {}
+    import re
+    for k, v in feature_dict.items():
+        val = v.get("value") if isinstance(v, dict) else v
+        match = re.search(r"[\d.]+", str(val))
+        if match:
+            normalized_features[k.lower()] = float(match.group())
+
+    feature_vector = []
+    for f in FEATURE_ORDER:
+        val = normalized_features.get(f, 0.0)
+        # Fix 3: Glucose feature encoding -> deviation from normal
+        if f == "glucose":
+            val = max(0.0, val - 110.0)
+        feature_vector.append(val)
+        
     X_raw = np.array(feature_vector).reshape(1, -1)
 
     # ── Scale 13 features (scaler fitted without gender_encoded) ─────────────
     X_scaled_13 = scaler.transform(X_raw)
 
     # ── Re-insert gender_encoded at position 1 for XGBoost (14 features) ─────
-    gender_val = np.array([[float(feature_dict.get("gender_encoded", 1.0))]])
+    gender_val = np.array([[normalized_features.get("gender_encoded", 1.0)]])
     X_scaled = np.hstack([X_scaled_13[:, :1], gender_val, X_scaled_13[:, 1:]])
 
     # ── Predict ───────────────────────────────────────────────────────────────
@@ -126,12 +131,19 @@ def predict_safe(feature_dict: dict) -> dict:
     except AttributeError as e:
         if "__sklearn_tags__" not in str(e):
             raise
-        # sklearn version mismatch - use raw booster
         import xgboost as xgb
 
-        booster = model.calibrated_classifiers_[0].estimator
-        dmatrix = xgb.DMatrix(X_scaled)
-        proba_raw = booster.predict(dmatrix)
+        xgb_classifier = model.calibrated_classifiers_[0].estimator
+        raw_booster = xgb_classifier.get_booster()
+        
+        # Booster was trained with explicit feature names
+        xgb_features = ["age", "gender", "glucose", "hemoglobin", "cholesterol", 
+                        "bp_systolic", "bp_diastolic", "pulse_pressure", "tsh", 
+                        "vitamin_d", "creatinine", "ldl", "hdl", "crp"]
+        dmatrix = xgb.DMatrix(X_scaled, feature_names=xgb_features)
+        
+        # Raw booster returns 1D array of P(y=1)
+        proba_raw = raw_booster.predict(dmatrix)
         proba = [1 - proba_raw[0], proba_raw[0]]
     risk_proba = float(proba[1])          # P(high_risk)
     confidence = round(risk_proba * 100, 1)
@@ -168,30 +180,61 @@ def predict_safe(feature_dict: dict) -> dict:
         shap_dict   = {f: 0.0 for f in FEATURE_ORDER}
         top_factors = []
 
-    # ── Anomaly detection ─────────────────────────────────────────────────────
-    # Flag features outside clinical reference ranges
+    # ── Anomaly detection & Reference Ranges (Fix 1, 2, 4) ────────────────────
     REF_RANGES = {
-        "glucose":      (70,  100),
-        "hemoglobin":   (12,  17.5),
-        "cholesterol":  (0,   200),
-        "bp_systolic":  (90,  120),
-        "bp_diastolic": (60,  80),
-        "tsh":          (0.4, 4.0),
-        "vitamin_d":    (20,  50),
-        "creatinine":   (0.6, 1.2),
-        "ldl":          (0,   100),
-        "hdl":          (40,  60),
-        "crp":          (0,   3.0),
+        "glucose":      (70,  110, "mg/dL"),
+        "hemoglobin":   (12,  17.5, "g/dL"),
+        "cholesterol":  (0,   200,  "mg/dL"),
+        "bp_systolic":  (90,  120,  "mmHg"),
+        "bp_diastolic": (60,  80,   "mmHg"),
+        "tsh":          (0.4, 4.0,  "mIU/L"),
+        "vitamin_d":    (20,  50,   "ng/mL"),
+        "creatinine":   (0.6, 1.2,  "mg/dL"),
+        "ldl":          (0,   100,  "mg/dL"),
+        "hdl":          (40,  60,   "mg/dL"),
+        "crp":          (0,   3.0,  "mg/L"),
     }
 
     anomalies = []
-    for feat, (lo, hi) in REF_RANGES.items():
-        val = feature_dict.get(feat)
-        if val is not None:
-            if float(val) < lo:
-                anomalies.append(f"{feat}={val} BELOW normal ({lo}–{hi})")
-            elif float(val) > hi:
-                anomalies.append(f"{feat}={val} ABOVE normal ({lo}–{hi})")
+    
+    # Mutate original feature_dict to expose reference/flags to frontend
+    for k, v in feature_dict.items():
+        k_lower = k.lower()
+        if k_lower in REF_RANGES and k_lower in normalized_features:
+            lo, hi, unit = REF_RANGES[k_lower]
+            num_val = normalized_features[k_lower]
+            
+            # Decide flag
+            if num_val > hi:
+                flag = "HIGH"
+            elif num_val < lo:
+                flag = "LOW"
+            else:
+                flag = "NORMAL"
+
+            # Mutate to feed frontend Fix 2
+            if isinstance(v, dict):
+                v["reference"] = f"{lo}\u2013{hi}"
+                v["unit"] = unit
+                v["flag"] = flag
+                v["name"] = k.title()
+                v["value"] = num_val
+
+            if flag != "NORMAL":
+                severity = "mild"
+                if num_val > hi * 1.5 or num_val < lo * 0.5:
+                    severity = "severe"
+                elif num_val > hi * 1.2 or num_val < lo * 0.8:
+                    severity = "moderate"
+                
+                anomalies.append({
+                    "field": k.title(),
+                    "value": num_val,
+                    "unit": unit,
+                    "reference": f"{lo}\u2013{hi}",
+                    "severity": severity,
+                    "explanation": f"{k.title()} is {flag} (normal range: {lo}\u2013{hi}). Possible clinical risk."
+                })
 
     return {
         "label":       label,

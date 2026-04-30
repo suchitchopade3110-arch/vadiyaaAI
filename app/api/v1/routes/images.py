@@ -2,7 +2,7 @@ import uuid
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from celery.result import AsyncResult
-from datetime import datetime
+from datetime import UTC, datetime
 
 from app.db.session import get_db
 from app.schemas.image import ImageAsyncResponse, AnalysisType
@@ -64,20 +64,34 @@ async def submit_image_analysis(
     )
 
 
-@router.get("/{task_id}")
-async def get_image_combined(task_id: str):
-    """Combined status and result endpoint for the frontend."""
+@router.get("/status/{task_id}", response_model=JobStatus)
+async def get_image_status(task_id: str):
+    """Poll image analysis task status."""
+    request_id = str(uuid.uuid4())
     result = AsyncResult(task_id, app=celery_app)
     state = result.state
+    meta = result.info or {}
 
+    if state == "PENDING":
+        return JobStatus(request_id=request_id, task_id=task_id, status="pending")
+    if state == "PROGRESS":
+        return JobStatus(
+            request_id=request_id,
+            task_id=task_id,
+            status="processing",
+            progress_pct=meta.get("pct", 0),
+        )
     if state == "SUCCESS":
-        return result.result
-    
-    return {
-        "status": state.lower(),
-        "task_id": task_id,
-        "id": task_id
-    }
+        return JobStatus(
+            request_id=request_id,
+            task_id=task_id,
+            status="complete",
+            progress_pct=100,
+            result_url=f"/api/v1/analyze/image/{task_id}",
+        )
+    if state == "FAILURE":
+        return JobStatus(request_id=request_id, task_id=task_id, status="failed", error=str(meta))
+    return JobStatus(request_id=request_id, task_id=task_id, status=state.lower())
 
 
 @router.get("/image/{analysis_id}")
@@ -126,7 +140,7 @@ async def get_image_status_or_result(analysis_id: uuid.UUID, db: AsyncSession = 
     return {
         "request_id": request_id,
         "medical_disclaimer": MEDICAL_DISCLAIMER,
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "analysis_id": str(analysis_id),
         "id": str(analysis_id),
         "status": image_record.status.value,
@@ -156,4 +170,20 @@ async def get_image_status_or_result(analysis_id: uuid.UUID, db: AsyncSession = 
             "top_class": image_record.classification or "unknown",
             "top_confidence": image_record.confidence or 0.0
         }
+    }
+
+
+@router.get("/{task_id}")
+async def get_image_combined(task_id: str):
+    """Combined status and result endpoint for the frontend."""
+    result = AsyncResult(task_id, app=celery_app)
+    state = result.state
+
+    if state == "SUCCESS":
+        return result.result
+    
+    return {
+        "status": state.lower(),
+        "task_id": task_id,
+        "id": task_id
     }

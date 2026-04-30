@@ -35,6 +35,7 @@ pydicom==2.4.4                   # DICOM parsing
 # ── OCR ───────────────────────────────────────────────────────────────────────
 pytesseract==0.3.10
 PyMuPDF==1.24.3                  # PDF text extraction
+reportlab==4.5.0                 # Clinical PDF report generation
 
 # ── Data ──────────────────────────────────────────────────────────────────────
 pandas==2.2.2

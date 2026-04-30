@@ -7,14 +7,38 @@ VaidyaAI Middleware
 import time
 import uuid
 import json
+import logging
 from datetime import datetime, UTC
 from starlette.types import ASGIApp, Scope, Receive, Send
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 from app.core.config import settings
+from app.core.errors import format_error
 
 MAX_BYTES = settings.MAX_UPLOAD_SIZE_MB * 1024 * 1024
+logger = logging.getLogger("vaidya")
+
+
+class CorrelationIDMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        request_id = request.scope.get("request_id", str(uuid.uuid4()))
+        request.scope["request_id"] = request_id
+        request.state.request_id = request_id
+        response = await call_next(request)
+        if "X-Request-ID" not in response.headers:
+            response.headers["X-Request-ID"] = request_id
+        return response
+
+
+class ErrorHandlerMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        try:
+            return await call_next(request)
+        except Exception as exc:
+            request_id = getattr(request.state, "request_id", "unknown")
+            logger.error("Unhandled error request_id=%s error=%s", request_id, exc)
+            return format_error("INTERNAL_ERROR", str(exc), 500)
 
 
 class MaxBodySizeMiddleware:
@@ -57,7 +81,7 @@ class APIContractMiddleware:
             return await self.app(scope, receive, send)
 
         start_time = time.time()
-        request_id = str(uuid.uuid4())
+        request_id = scope.get("request_id", str(uuid.uuid4()))
         scope["request_id"] = request_id
 
         async def send_wrapper(message):
@@ -69,7 +93,6 @@ class APIContractMiddleware:
                         headers.append((header, value))
                 
                 headers.append((b"X-Medical-Disclaimer", b"AI-assisted analysis. NOT diagnostic."))
-                headers.append((b"X-Request-ID", request_id.encode()))
                 
                 process_time = (time.time() - start_time) * 1000
                 headers.append((b"X-Process-Time-Ms", f"{process_time:.2f}".encode()))

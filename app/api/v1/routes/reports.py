@@ -81,22 +81,7 @@ async def submit_report_analysis(
     )
 
 
-@router.get("/{task_id}")
-async def get_report_combined(task_id: str):
-    """Combined status and result endpoint for the frontend."""
-    result = AsyncResult(task_id, app=celery_app)
-    state = result.state
-
-    if state == "SUCCESS":
-        return result.result
-    
-    return {
-        "status": state.lower(),
-        "task_id": task_id,
-        "id": task_id
-    }
-
-
+@router.get("/status/{task_id}", response_model=JobStatus)
 @router.get("/report/status/{task_id}", response_model=JobStatus)
 async def get_report_status(task_id: str):
     """Poll report analysis job status."""
@@ -121,6 +106,22 @@ async def get_report_status(task_id: str):
     elif state == "FAILURE":
         return JobStatus(request_id=request_id, task_id=task_id, status="failed", error=str(meta))
     return JobStatus(request_id=request_id, task_id=task_id, status=state.lower())
+
+
+@router.get("/{task_id}")
+async def get_report_combined(task_id: str):
+    """Combined status and result endpoint for the frontend."""
+    result = AsyncResult(task_id, app=celery_app)
+    state = result.state
+
+    if state == "SUCCESS":
+        return result.result
+    
+    return {
+        "status": state.lower(),
+        "task_id": task_id,
+        "id": task_id
+    }
 
 
 @router.get("/report/result/{task_id}")

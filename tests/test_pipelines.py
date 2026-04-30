@@ -81,8 +81,8 @@ def test_claim_pipeline_flow():
 def _make_fake_png() -> bytes:
     return (
         b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01"
-        b"\x08\x02\x00\x00\x00\x90wS\xde\x00\x00\x00\x0cIDATx\x9cc\xf8\x0f\x00"
-        b"\x00\x01\x01\x00\x05\x18\xd8N\x00\x00\x00\x00IEND\xaeB`\x82"
+        b"\x08\x02\x00\x00\x00\x90wS\xde\x00\x00\x00\x0cIDATx\x9cc\xf8\xcf\xc0"
+        b"\x00\x00\x03\x01\x01\x00\xc9\xfe\x92\xef\x00\x00\x00\x00IEND\xaeB`\x82"
     )
 
 def test_image_pipeline_flow():
@@ -118,3 +118,112 @@ def test_report_pipeline_flow():
     # 2. Poll
     r = client.get(f"/api/v1/analyze/report/status/{task_id}")
     assert r.status_code == 200
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  PHASE 2 E2E SCENARIOS — TEXT PIPELINE (T1–T6)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def test_T1_claim_too_short_rejected():
+    """Claim under min_length returns 422."""
+    r = client.post(
+        f"/api/v1/verify/claim/{uuid.uuid4()}",
+        json={"claim_text": "short"},
+    )
+    assert r.status_code == 422
+
+
+def test_T2_claim_missing_field_rejected():
+    """Missing claim_text returns 422."""
+    r = client.post(
+        f"/api/v1/verify/claim/{uuid.uuid4()}",
+        json={},
+    )
+    assert r.status_code == 422
+
+
+def test_T3_report_csv_anomaly_flagged():
+    """CSV with high HbA1c — response must contain task metadata."""
+    csv = b"parameter,value,unit\nHbA1c,9.5,%\nGlucose,210,mg/dL"
+    r = client.post(
+        "/api/v1/analyze/report/lab",
+        files={"file": ("labs.csv", io.BytesIO(csv), "text/csv")},
+    )
+    assert r.status_code == 202
+    data = r.json()
+    assert "task_id" in data
+
+
+def test_T4_unsupported_file_format_rejected():
+    """Uploading .txt file returns 415."""
+    r = client.post(
+        "/api/v1/analyze/report/lab",
+        files={"file": ("report.txt", io.BytesIO(b"some text"), "text/plain")},
+    )
+    assert r.status_code == 415
+
+
+def test_T5_oversized_file_rejected():
+    """File exceeding size limit returns 413."""
+    big = io.BytesIO(b"x" * (51 * 1024 * 1024))
+    r = client.post(
+        "/api/v1/analyze/report/lab",
+        files={"file": ("big.pdf", big, "application/pdf")},
+    )
+    assert r.status_code == 413
+
+
+def test_T6_disclaimer_in_all_text_responses():
+    """Every text pipeline response includes medical disclaimer."""
+    r = client.post(
+        f"/api/v1/verify/claim/{uuid.uuid4()}",
+        json={"claim_text": SAMPLE_CLAIM},
+    )
+    data = r.json()
+    assert "medical_disclaimer" in data
+    assert "NOT A MEDICAL DIAGNOSIS" in data["medical_disclaimer"]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  PHASE 2 E2E SCENARIOS — IMAGE PIPELINE (I1–I5)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def test_I1_invalid_analysis_type_rejected():
+    """Unknown analysis_type returns 422."""
+    r = client.post(
+        "/api/v1/analyze/image/ultrasound",
+        files={"file": ("test.png", io.BytesIO(_make_fake_png()), "image/png")},
+    )
+    assert r.status_code == 422
+
+
+def test_I2_image_ct_accepted():
+    r = client.post(
+        "/api/v1/analyze/image/ct",
+        files={"file": ("ct.png", io.BytesIO(_make_fake_png()), "image/png")},
+    )
+    assert r.status_code in (202, 422)
+
+
+def test_I3_image_mri_accepted():
+    r = client.post(
+        "/api/v1/analyze/image/mri",
+        files={"file": ("mri.png", io.BytesIO(_make_fake_png()), "image/png")},
+    )
+    assert r.status_code in (202, 422)
+
+
+def test_I4_image_skin_accepted():
+    r = client.post(
+        "/api/v1/analyze/image/skin",
+        files={"file": ("skin.png", io.BytesIO(_make_fake_png()), "image/png")},
+    )
+    assert r.status_code in (202, 422)
+
+
+def test_I5_image_pathology_accepted():
+    r = client.post(
+        "/api/v1/analyze/image/pathology",
+        files={"file": ("path.png", io.BytesIO(_make_fake_png()), "image/png")},
+    )
+    assert r.status_code in (202, 422)

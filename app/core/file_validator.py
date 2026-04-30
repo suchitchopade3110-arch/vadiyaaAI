@@ -72,6 +72,18 @@ async def validate_upload(file: UploadFile, pipeline: str) -> bytes:
             detail=f"File content detected as '{sniffed_mime}', not valid for {pipeline} pipeline.",
         )
 
+    # 3.5 Image decodability check
+    if sniffed_mime in {"image/jpeg", "image/png"}:
+        import io
+        from PIL import Image
+        try:
+            Image.open(io.BytesIO(raw)).verify()
+        except Exception:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={"error": {"code": "FILE_FORMAT_UNSUPPORTED", "message": "File is not a valid image", "retryable": False}}
+            )
+
     # 4. DICOM-specific: verify magic bytes at offset 128
     if ext == ".dcm":
         _validate_dicom_magic(raw)

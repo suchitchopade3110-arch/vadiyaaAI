@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
-from datetime import datetime
+from datetime import UTC, datetime
 
 class BaseResponse(BaseModel):
     request_id: str
@@ -8,7 +8,7 @@ class BaseResponse(BaseModel):
         default="⚠️ AI-ASSISTED ANALYSIS — NOT A MEDICAL DIAGNOSIS. "
                 "Consult a qualified healthcare professional for medical decisions."
     )
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 class ConfidenceSignal(BaseModel):
     score: float = Field(..., ge=0, le=100, description="Platt-scaled 0–100")

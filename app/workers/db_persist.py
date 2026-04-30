@@ -8,10 +8,14 @@ Uses synchronous psycopg2 — Celery workers are sync, not async.
 
 import json
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import UUID
 
 logger = logging.getLogger(__name__)
+
+
+def _utc_now() -> datetime:
+    return datetime.now(UTC)
 
 
 def _get_conn():
@@ -63,7 +67,7 @@ def persist_claim(result: dict) -> bool:
             json.dumps(result.get("hallucination_details", {})),
             json.dumps(result.get("shap_values", {})),
             result.get("medical_disclaimer"),
-            datetime.utcnow(),
+            _utc_now(),
             result["claim_id"],
         ))
 
@@ -116,7 +120,7 @@ def persist_report(result: dict) -> bool:
             result.get("confidence_score"),
             result.get("uncertainty_flag", False),
             result.get("medical_disclaimer"),
-            datetime.utcnow(),
+            _utc_now(),
             result["report_id"],
         ))
 
@@ -181,7 +185,7 @@ def persist_image_analysis(result: dict) -> bool:
             result.get("uncertainty_flag", True),
             result.get("anomaly_detected", False),
             result.get("medical_disclaimer"),
-            datetime.utcnow(),
+            _utc_now(),
             result["analysis_id"],
         ))
 
@@ -206,7 +210,7 @@ def mark_failed(table: str, record_id: str, error: str) -> bool:
         cur  = conn.cursor()
         cur.execute(
             f"UPDATE {table} SET status = 'FAILED', completed_at = %s WHERE id = %s",
-            (datetime.utcnow(), record_id)
+            (_utc_now(), record_id)
         )
         conn.commit()
         cur.close()
@@ -228,7 +232,7 @@ def insert_claim(claim_id: str, claim_text: str, task_id: str, patient_id: str =
             INSERT INTO claims (id, claim_text, status, celery_task_id, created_at, uncertainty_flag, hallucination_detected)
             VALUES (%s, %s, 'PENDING', %s, %s, FALSE, FALSE)
             ON CONFLICT (id) DO NOTHING
-        """, (claim_id, claim_text, task_id, datetime.utcnow()))
+        """, (claim_id, claim_text, task_id, _utc_now()))
         conn.commit()
         cur.close()
         conn.close()
@@ -248,7 +252,7 @@ def insert_report(report_id: str, report_type: str, file_path: str,
             INSERT INTO reports (id, report_type, file_path, file_format, status, celery_task_id, created_at, uncertainty_flag)
             VALUES (%s, %s, %s, %s, 'PENDING', %s, %s, FALSE)
             ON CONFLICT (id) DO NOTHING
-        """, (report_id, report_type, file_path, file_format, task_id, datetime.utcnow()))
+        """, (report_id, report_type, file_path, file_format, task_id, _utc_now()))
         conn.commit()
         cur.close()
         conn.close()
@@ -268,7 +272,7 @@ def insert_image_analysis(analysis_id: str, image_type: str, file_path: str,
             INSERT INTO image_analyses (id, image_type, file_path, file_format, status, celery_task_id, created_at, uncertainty_flag, anomaly_detected)
             VALUES (%s, %s, %s, %s, 'PENDING', %s, %s, FALSE, FALSE)
             ON CONFLICT (id) DO NOTHING
-        """, (analysis_id, image_type, file_path, file_format, task_id, datetime.utcnow()))
+        """, (analysis_id, image_type, file_path, file_format, task_id, _utc_now()))
         conn.commit()
         cur.close()
         conn.close()

@@ -8,18 +8,42 @@ from contextlib import asynccontextmanager
 
 from app.core.config import settings
 from app.core.logging import setup_logging
-from app.core.middleware import MaxBodySizeMiddleware, APIContractMiddleware
+from app.core.middleware import (
+    APIContractMiddleware,
+    CorrelationIDMiddleware,
+    ErrorHandlerMiddleware,
+    MaxBodySizeMiddleware,
+)
 from app.api.v1.router import api_router
 from app.db.session import engine
 from app.db import base  # noqa: F401 — import models for Alembic
+from fastapi.exceptions import RequestValidationError
+from app.core.errors import validation_exception_handler, general_exception_handler
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+
+limiter = Limiter(
+    key_func=get_remote_address,  # swap to API key func later
+    storage_uri="redis://localhost:6380/0"
+)
+from app.routes import (
+    auth,
+    claims,
+    images,
+    jobs,
+    pdf_reports,
+    reports,
+    text_routes,
+    websocket_routes,
+)
 
 log = logging.getLogger(__name__)
 
 # Path to the stitched frontend pages (relative to project root)
 _FRONTEND_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-    "stitch_vaidyaai_clinical_analysis_suite",
-    "stitch_vaidyaai_clinical_analysis_suite",
+    "ui"
 )
 
 
@@ -41,9 +65,12 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Order matters: APIContract -> MaxBodySize -> CORS
-app.add_middleware(APIContractMiddleware)
+# Starlette wraps middleware in reverse registration order.
+# Keep CorrelationID outermost so APIContract/logging reuse the same request ID.
 app.add_middleware(MaxBodySizeMiddleware)
+app.add_middleware(APIContractMiddleware)
+app.add_middleware(ErrorHandlerMiddleware)
+app.add_middleware(CorrelationIDMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],          # dev-mode: open; tighten in prod via settings
@@ -52,7 +79,20 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.add_exception_handler(RequestValidationError, validation_exception_handler)
+app.add_exception_handler(Exception, general_exception_handler)
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.state.limiter = limiter
+
 app.include_router(api_router, prefix="/api/v1")
+app.include_router(text_routes.router, prefix="/api", tags=["Direct Text Pipeline"])
+app.include_router(websocket_routes.router)
+app.include_router(auth.router, prefix="/auth", tags=["auth"])
+app.include_router(claims.router, prefix="/api/v1/verify", tags=["claims"])
+app.include_router(images.router, prefix="/api/v1/analyze", tags=["images"])
+app.include_router(reports.router, prefix="/api/v1/analyze", tags=["reports"])
+app.include_router(pdf_reports.router, prefix="/api/v1", tags=["PDF Reports"])
+app.include_router(jobs.router, prefix="/jobs", tags=["jobs"])
 
 
 @app.get("/health")

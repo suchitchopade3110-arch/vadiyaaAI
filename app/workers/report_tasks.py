@@ -10,7 +10,7 @@ FIXES:
 """
 
 import time
-from datetime import datetime
+from datetime import UTC, datetime
 from celery import Task
 from app.workers.celery_app import celery_app
 from app.core.disclaimer import MEDICAL_DISCLAIMER
@@ -91,7 +91,7 @@ def analyze_report(self, report_id: str, file_path: str, report_type: str, file_
             "uncertainty_flag":   uncertainty_flag,
             "medical_disclaimer": MEDICAL_DISCLAIMER,
             "processing_time_ms": round(elapsed_ms, 2),
-            "completed_at":       datetime.utcnow().isoformat(),
+            "completed_at":       datetime.now(UTC).isoformat(),
         }
 
         persist_report(result)

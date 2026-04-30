@@ -13,6 +13,7 @@ _CONDITION_KEYWORDS = [
     "heart failure", "stroke", "sepsis", "anemia", "obesity", "depression",
     "anxiety", "tuberculosis", "hepatitis", "cirrhosis", "arthritis",
     "hypothyroidism", "hyperthyroidism", "ckd", "chronic kidney disease",
+    "fever", "cough", "chest pain"
 ]
 
 _MED_KEYWORDS = [
@@ -32,7 +33,7 @@ _PROCEDURE_KEYWORDS = [
 _LAB_PATTERN = re.compile(
     r'(HbA1c|glucose|hemoglobin|creatinine|urea|potassium|sodium|cholesterol'
     r'|triglycerides|ALT|AST|TSH|T3|T4|WBC|RBC|platelets|BP|blood pressure'
-    r'|SpO2|eGFR|INR|PSA)\s*[:\s]*([0-9]+\.?[0-9]*\s*[%a-zA-Z/]*)',
+    r'|SpO2|eGFR|INR|PSA)\s*[:\s]*([0-9]+\.?[0-9]*\s*[%a-zA-Z0-9/]*)',
     re.IGNORECASE
 )
 

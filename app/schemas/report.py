@@ -19,10 +19,12 @@ class ReportAsyncResponse(BaseResponse):
     estimated_seconds: int = 20
 
 class AnomalyFlag(BaseModel):
-    parameter: str
+    field: str
     value: Any
-    reference_range: str
+    unit: str
+    reference: str
     severity: str   # mild | moderate | severe
+    explanation: Optional[str] = None
 
 class ReportResult(BaseResponse):
     report_id: UUID

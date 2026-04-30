@@ -65,6 +65,29 @@ class FileUploadService:
                 detail=f"File exceeds limit."
             )
 
+        pipeline_type = EXTENSION_PIPELINE_MAP.get(extension, "unknown")
+
+        # ── MIME and Image decodability check ──────────────────────────────
+        import magic
+        mime = magic.from_buffer(content[:2048], mime=True)
+        
+        if pipeline_type == "image":
+            if mime not in {"image/jpeg", "image/png", "application/dicom"}:
+                raise HTTPException(
+                    status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+                    detail={"error": {"code": "FILE_FORMAT_UNSUPPORTED", "message": f"Unsupported MIME: {mime}", "retryable": False}}
+                )
+            if mime in {"image/jpeg", "image/png"}:
+                import io
+                from PIL import Image
+                try:
+                    Image.open(io.BytesIO(content)).verify()
+                except Exception:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail={"error": {"code": "FILE_FORMAT_UNSUPPORTED", "message": "File is not a valid image", "retryable": False}}
+                    )
+
         # ── DICOM magic bytes check ────────────────────────────────────────
         if extension == "dcm":
             # DICOM files start with 128 bytes preamble + "DICM" at offset 128
