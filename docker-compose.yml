@@ -1,0 +1,169 @@
+# ── VaidyaAI — Docker Compose Stack ──────────────────────────────────────────
+# Services: FastAPI app + PostgreSQL + Redis + Celery workers
+# Usage:
+#   docker-compose up --build          # Start all services
+#   docker-compose up -d               # Detached mode
+#   docker-compose logs -f api         # Stream API logs
+#   docker-compose logs -f worker-claims # Stream claim worker logs
+
+services:
+
+  # ── FastAPI Application ────────────────────────────────────────────────────
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    ports:
+      - "8000:8000"
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - UPLOAD_DIR=/app/uploads
+      - DEBUG=true
+    volumes:
+      - .:/app
+      - upload_data:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - vaidyaai-net
+
+  # ── Celery Worker: Claims (text pipeline) ─────────────────────────────────
+  worker-claims:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: celery -A app.workers.celery_app worker -Q claims -c 4 -l INFO -n claims@%h
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+    volumes:
+      - .:/app
+      - upload_data:/app/uploads
+    depends_on:
+      - redis
+      - postgres
+    restart: unless-stopped
+    networks:
+      - vaidyaai-net
+
+  # ── Celery Worker: Images (GPU-bound — MedSAM + CheXNet) ─────────────────
+  worker-images:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: celery -A app.workers.celery_app worker -Q images -c 1 -l INFO -n images@%h
+    # NOTE: Set -c 1 for image workers — MedSAM is GPU/memory intensive
+    # Phase 2: Add GPU support: runtime: nvidia + device_requests
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+    volumes:
+      - .:/app
+      - upload_data:/app/uploads
+    depends_on:
+      - redis
+      - postgres
+    restart: unless-stopped
+    networks:
+      - vaidyaai-net
+
+  # ── Celery Worker: Reports ────────────────────────────────────────────────
+  worker-reports:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: celery -A app.workers.celery_app worker -Q reports -c 2 -l INFO -n reports@%h
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+    volumes:
+      - .:/app
+      - upload_data:/app/uploads
+    depends_on:
+      - redis
+      - postgres
+    restart: unless-stopped
+    networks:
+      - vaidyaai-net
+
+  # ── Celery Flower (monitoring UI) ─────────────────────────────────────────
+  flower:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: celery -A app.workers.celery_app flower --port=5555
+    ports:
+      - "5555:5555"
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+    depends_on:
+      - redis
+    restart: unless-stopped
+    networks:
+      - vaidyaai-net
+
+  # ── PostgreSQL ────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_USER=vaidya
+      - POSTGRES_PASSWORD=vaidya123
+      - POSTGRES_DB=vaidyaai
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vaidya -d vaidyaai"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - vaidyaai-net
+
+  # ── Redis ─────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - vaidyaai-net
+
+# ── Volumes ────────────────────────────────────────────────────────────────────
+volumes:
+  postgres_data:
+  redis_data:
+  upload_data:
+
+# ── Networks ───────────────────────────────────────────────────────────────────
+networks:
+  vaidyaai-net:
+    driver: bridge

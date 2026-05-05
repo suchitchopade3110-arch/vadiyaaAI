@@ -1,0 +1,226 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="678" height="768" viewBox="0 0 678 768" role="img" aria-labelledby="title desc">
+  <title id="title">VaidyaAI six layer medical intelligence workflow with prediction layer</title>
+  <desc id="desc">Architecture diagram showing input, preprocessing, segmentation, ML prediction, LLM and RAG intelligence, output, and backend infrastructure.</desc>
+  <defs>
+    <style>
+      .bg { fill: #1d1e24; }
+      .infra { fill: #343741; stroke: #6b7280; }
+      .input { fill: #333640; stroke: #6b7280; }
+      .pre { fill: #063f70; stroke: #2d9cff; }
+      .seg { fill: #392d8f; stroke: #8b7cf6; }
+      .ml { fill: #5c4100; stroke: #c78900; }
+      .rag { fill: #00463d; stroke: #00a884; }
+      .safety { fill: #6b2b12; stroke: #d15b31; }
+      .out { fill: #245800; stroke: #75b900; }
+      .layer-text { fill: #d9dbe2; font: 700 13px Arial, Helvetica, sans-serif; letter-spacing: 0; }
+      .label { fill: #d7d9e0; font: 700 12px Arial, Helvetica, sans-serif; letter-spacing: 0; }
+      .small { fill: #aab0bd; font: 8px Arial, Helvetica, sans-serif; letter-spacing: 0; }
+      .tiny { fill: #aab0bd; font: 7px Arial, Helvetica, sans-serif; letter-spacing: 0; }
+      .legend { fill: #b8bec9; font: 7px Arial, Helvetica, sans-serif; letter-spacing: 0; }
+      .arrow { stroke: #8d929e; stroke-width: 1.2; fill: none; marker-end: url(#arrow); }
+      .muted-arrow { stroke: #737986; stroke-width: 1; fill: none; marker-end: url(#arrow-muted); }
+    </style>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#8d929e"/>
+    </marker>
+    <marker id="arrow-muted" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#737986"/>
+    </marker>
+  </defs>
+
+  <rect class="bg" width="678" height="768"/>
+
+  <!-- Layer 1 -->
+  <rect class="infra" x="20" y="20" width="638" height="30" rx="4"/>
+  <text class="layer-text" x="339" y="36" text-anchor="middle">Layer 1 - Input</text>
+  <text class="small" x="339" y="46" text-anchor="middle">multi-format medical data</text>
+
+  <g>
+    <rect class="input" x="20" y="56" width="121" height="29" rx="4"/>
+    <text class="label" x="80.5" y="70" text-anchor="middle">Text claims</text>
+    <text class="small" x="80.5" y="80" text-anchor="middle">medical verify</text>
+
+    <rect class="input" x="150" y="56" width="121" height="29" rx="4"/>
+    <text class="label" x="210.5" y="70" text-anchor="middle">Clinical notes</text>
+    <text class="small" x="210.5" y="80" text-anchor="middle">doctor / discharge</text>
+
+    <rect class="input" x="280" y="56" width="120" height="29" rx="4"/>
+    <text class="label" x="340" y="70" text-anchor="middle">Lab reports</text>
+    <text class="small" x="340" y="80" text-anchor="middle">PDF / blood work</text>
+
+    <rect class="input" x="410" y="56" width="120" height="29" rx="4"/>
+    <text class="label" x="470" y="70" text-anchor="middle">Medical images</text>
+    <text class="small" x="470" y="80" text-anchor="middle">X-ray / CT / MRI</text>
+
+    <rect class="input" x="539" y="56" width="119" height="29" rx="4"/>
+    <text class="label" x="598.5" y="70" text-anchor="middle">DICOM files</text>
+    <text class="small" x="598.5" y="80" text-anchor="middle">metadata + pixels</text>
+  </g>
+
+  <path class="arrow" d="M 339 86 V 104"/>
+
+  <!-- Layer 2 -->
+  <rect class="pre" x="20" y="108" width="638" height="30" rx="4"/>
+  <text class="layer-text" x="339" y="123" text-anchor="middle">Layer 2 - Preprocessing</text>
+  <text class="small" x="339" y="133" text-anchor="middle">extract - normalize - validate</text>
+
+  <rect class="pre" x="20" y="143" width="153" height="30" rx="4"/>
+  <text class="label" x="96.5" y="157" text-anchor="middle">ClinicalBERT NER</text>
+  <text class="small" x="96.5" y="167" text-anchor="middle">entities / meds / values</text>
+
+  <rect class="pre" x="183" y="143" width="153" height="30" rx="4"/>
+  <text class="label" x="259.5" y="157" text-anchor="middle">Tesseract + PyMuPDF</text>
+  <text class="small" x="259.5" y="167" text-anchor="middle">OCR + raw text</text>
+
+  <rect class="pre" x="346" y="143" width="151" height="30" rx="4"/>
+  <text class="label" x="421.5" y="157" text-anchor="middle">OpenCV + CLAHE</text>
+  <text class="small" x="421.5" y="167" text-anchor="middle">resize - denoise - enhance</text>
+
+  <rect class="pre" x="507" y="143" width="151" height="30" rx="4"/>
+  <text class="label" x="582.5" y="157" text-anchor="middle">pydicom parser</text>
+  <text class="small" x="582.5" y="167" text-anchor="middle">slices + metadata</text>
+
+  <rect class="pre" x="240" y="179" width="200" height="27" rx="4"/>
+  <text class="label" x="340" y="192" text-anchor="middle">Data Validator</text>
+  <text class="small" x="340" y="202" text-anchor="middle">format check + quality score</text>
+
+  <path class="arrow" d="M 339 207 V 225"/>
+
+  <!-- Layer 3 -->
+  <rect class="seg" x="20" y="229" width="638" height="30" rx="4"/>
+  <text class="layer-text" x="339" y="244" text-anchor="middle">Layer 3 - MedSAM Segmentation</text>
+  <text class="small" x="339" y="254" text-anchor="middle">image path only</text>
+
+  <rect class="seg" x="20" y="264" width="206" height="29" rx="4"/>
+  <text class="label" x="123" y="278" text-anchor="middle">LiteMedSAM</text>
+  <text class="small" x="123" y="288" text-anchor="middle">segment structures</text>
+
+  <rect class="seg" x="236" y="264" width="206" height="29" rx="4"/>
+  <text class="label" x="339" y="278" text-anchor="middle">Auto-Prompt</text>
+  <text class="small" x="339" y="288" text-anchor="middle">bounding box detect</text>
+
+  <rect class="seg" x="452" y="264" width="206" height="29" rx="4"/>
+  <text class="label" x="555" y="278" text-anchor="middle">Mask + ROI</text>
+  <text class="small" x="555" y="288" text-anchor="middle">binary mask + contour</text>
+
+  <path class="muted-arrow" d="M 226 278 H 235"/>
+  <path class="muted-arrow" d="M 442 278 H 451"/>
+  <path class="arrow" d="M 339 294 V 312"/>
+
+  <!-- Layer 4 -->
+  <rect class="ml" x="20" y="316" width="638" height="30" rx="4"/>
+  <text class="layer-text" x="339" y="331" text-anchor="middle">Layer 4 - ML Prediction Engine</text>
+  <text class="small" x="339" y="341" text-anchor="middle">tabular - image - explainability</text>
+
+  <rect class="ml" x="20" y="351" width="153" height="30" rx="4"/>
+  <text class="label" x="96.5" y="365" text-anchor="middle">StandardScaler</text>
+  <text class="small" x="96.5" y="375" text-anchor="middle">13 lab features</text>
+
+  <rect class="ml" x="183" y="351" width="153" height="30" rx="4"/>
+  <text class="label" x="259.5" y="365" text-anchor="middle">XGBoost + Cal CV</text>
+  <text class="small" x="259.5" y="375" text-anchor="middle">sigmoid calibrated risk</text>
+
+  <rect class="ml" x="346" y="351" width="151" height="30" rx="4"/>
+  <text class="label" x="421.5" y="365" text-anchor="middle">SHAP</text>
+  <text class="small" x="421.5" y="375" text-anchor="middle">top 3 drivers</text>
+
+  <rect class="ml" x="507" y="351" width="151" height="30" rx="4"/>
+  <text class="label" x="582.5" y="365" text-anchor="middle">CheXNet / ResNet</text>
+  <text class="small" x="582.5" y="375" text-anchor="middle">image classifier</text>
+
+  <rect class="ml" x="20" y="386" width="316" height="38" rx="4"/>
+  <text class="label" x="178" y="400" text-anchor="middle">Feature Set</text>
+  <text class="tiny" x="178" y="410" text-anchor="middle">age glucose Hb cholesterol BP TSH VitD Cr</text>
+  <text class="tiny" x="178" y="419" text-anchor="middle">LDL HDL CRP pulse pressure</text>
+
+  <rect class="ml" x="346" y="386" width="151" height="30" rx="4"/>
+  <text class="label" x="421.5" y="400" text-anchor="middle">Anomaly Detector</text>
+  <text class="small" x="421.5" y="410" text-anchor="middle">reference ranges + flags</text>
+
+  <rect class="ml" x="507" y="386" width="151" height="30" rx="4"/>
+  <text class="label" x="582.5" y="400" text-anchor="middle">GradCAM</text>
+  <text class="small" x="582.5" y="410" text-anchor="middle">image heatmap</text>
+
+  <path class="muted-arrow" d="M 173 366 H 182"/>
+  <path class="muted-arrow" d="M 336 366 H 345"/>
+  <path class="arrow" d="M 339 425 V 432"/>
+
+  <!-- Layer 5 -->
+  <rect class="rag" x="20" y="436" width="638" height="30" rx="4"/>
+  <text class="layer-text" x="339" y="451" text-anchor="middle">Layer 5 - LLM + RAG Intelligence</text>
+  <text class="small" x="339" y="461" text-anchor="middle">retrieve - reason - verify - flag</text>
+
+  <rect class="rag" x="20" y="471" width="206" height="29" rx="4"/>
+  <text class="label" x="123" y="485" text-anchor="middle">BioGPT</text>
+  <text class="small" x="123" y="495" text-anchor="middle">encode + embeddings</text>
+
+  <rect class="rag" x="236" y="471" width="206" height="29" rx="4"/>
+  <text class="label" x="339" y="485" text-anchor="middle">ChromaDB</text>
+  <text class="small" x="339" y="495" text-anchor="middle">vector search top-k</text>
+
+  <rect class="rag" x="452" y="471" width="206" height="29" rx="4"/>
+  <text class="label" x="555" y="485" text-anchor="middle">GPT-4 / Llama-3</text>
+  <text class="small" x="555" y="495" text-anchor="middle">reason - verify - diagnose</text>
+
+  <rect class="rag" x="20" y="506" width="316" height="29" rx="4"/>
+  <text class="label" x="178" y="520" text-anchor="middle">LangChain RAG</text>
+  <text class="small" x="178" y="530" text-anchor="middle">claim prompt templates + citation</text>
+
+  <rect class="safety" x="346" y="506" width="312" height="29" rx="4"/>
+  <text class="label" x="502" y="520" text-anchor="middle">Hallucination Loop</text>
+  <text class="small" x="502" y="530" text-anchor="middle">self-verify + flag conflicts</text>
+
+  <rect class="safety" x="240" y="541" width="200" height="27" rx="4"/>
+  <text class="label" x="340" y="555" text-anchor="middle">Uncertainty Signal</text>
+  <text class="small" x="340" y="565" text-anchor="middle">low confidence + insufficient evidence</text>
+
+  <path class="muted-arrow" d="M 226 485 H 235"/>
+  <path class="muted-arrow" d="M 442 485 H 451"/>
+  <path class="arrow" d="M 339 569 V 587"/>
+
+  <!-- Layer 6 -->
+  <rect class="out" x="20" y="591" width="638" height="30" rx="4"/>
+  <text class="layer-text" x="339" y="606" text-anchor="middle">Layer 6 - Output</text>
+  <text class="small" x="339" y="616" text-anchor="middle">actionable - transparent - safe</text>
+
+  <rect class="out" x="20" y="626" width="153" height="29" rx="4"/>
+  <text class="label" x="96.5" y="640" text-anchor="middle">Cited explanation</text>
+  <text class="small" x="96.5" y="650" text-anchor="middle">every claim linked</text>
+
+  <rect class="out" x="183" y="626" width="153" height="29" rx="4"/>
+  <text class="label" x="259.5" y="640" text-anchor="middle">Risk score 0-100</text>
+  <text class="small" x="259.5" y="650" text-anchor="middle">Platt scaled + calibrated</text>
+
+  <rect class="out" x="346" y="626" width="151" height="29" rx="4"/>
+  <text class="label" x="421.5" y="640" text-anchor="middle">SHAP top 3</text>
+  <text class="small" x="421.5" y="650" text-anchor="middle">feature contribution</text>
+
+  <rect class="out" x="507" y="626" width="151" height="29" rx="4"/>
+  <text class="label" x="582.5" y="640" text-anchor="middle">PDF report</text>
+  <text class="small" x="582.5" y="650" text-anchor="middle">clinical downloadable</text>
+
+  <rect class="safety" x="189" y="661" width="300" height="29" rx="4"/>
+  <text class="label" x="339" y="675" text-anchor="middle">Medical Disclaimer</text>
+  <text class="small" x="339" y="685" text-anchor="middle">AI-assisted - not diagnostic</text>
+
+  <!-- Backend -->
+  <rect class="infra" x="20" y="700" width="638" height="30" rx="4"/>
+  <text class="layer-text" x="339" y="715" text-anchor="middle">Backend infrastructure (all layers)</text>
+  <text class="small" x="339" y="725" text-anchor="middle">FastAPI - PostgreSQL - SQLAlchemy - Celery - Redis - Docker</text>
+
+  <!-- Legend -->
+  <rect class="input" x="20" y="742" width="10" height="8" rx="1"/>
+  <text class="legend" x="35" y="749">Input / Infra</text>
+  <rect class="pre" x="85" y="742" width="10" height="8" rx="1"/>
+  <text class="legend" x="100" y="749">Preprocessing</text>
+  <rect class="seg" x="156" y="742" width="10" height="8" rx="1"/>
+  <text class="legend" x="171" y="749">Segmentation</text>
+  <rect class="ml" x="228" y="742" width="10" height="8" rx="1"/>
+  <text class="legend" x="243" y="749">ML / Predict</text>
+  <rect class="rag" x="292" y="742" width="10" height="8" rx="1"/>
+  <text class="legend" x="307" y="749">LLM + RAG</text>
+  <rect class="safety" x="365" y="742" width="10" height="8" rx="1"/>
+  <text class="legend" x="380" y="749">Safety</text>
+  <rect class="out" x="432" y="742" width="10" height="8" rx="1"/>
+  <text class="legend" x="447" y="749">Output</text>
+</svg>

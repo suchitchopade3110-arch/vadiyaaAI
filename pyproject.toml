@@ -1,0 +1,22 @@
+[project]
+name = "vaidya-ai"
+version = "1.0.0"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "sqlalchemy",
+    "alembic",
+    "psycopg2-binary",
+    "celery[redis]",
+    "pydantic-settings",
+    "python-multipart",
+    "reportlab",
+    "httpx",
+    "pytest",
+    "pytest-asyncio",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
