@@ -12,18 +12,16 @@ from datetime import datetime
 from app.db.session import get_db
 from app.schemas.claim import ClaimRequest, ClaimAsyncResponse, ClaimResult
 from app.schemas.job import JobStatus
-from app.workers.claim_tasks import verify_claim
+from app.workers.pipeline_tasks import verify_claim_task
 from app.workers.celery_app import celery_app
 from app.core.disclaimer import MEDICAL_DISCLAIMER
-from app.workers.db_persist import insert_claim
 
 router = APIRouter()
 
 
-@router.post("/claim", response_model=ClaimAsyncResponse, status_code=202)
+@router.post("/claim", status_code=202)
 async def submit_claim(
     payload: ClaimRequest,
-    db: AsyncSession = Depends(get_db),
 ):
     """
     Submit a medical claim for verification.
@@ -33,32 +31,22 @@ async def submit_claim(
     Pipeline (async):
     ClinicalBERT NER → BioGPT → ChromaDB → GPT-4/Llama → Hallucination Check
     """
-    request_id = str(uuid.uuid4())
-
-    # Generate a claim_id since the frontend doesn't provide one
-    claim_id = str(uuid.uuid4())
+    job_id = str(uuid.uuid4())
 
     # ── Dispatch Celery task ───────────────────────────────────────────────
-    task = verify_claim.apply_async(
-        args=[claim_id, payload.claim_text],
-        kwargs={"patient_id": str(payload.patient_id) if payload.patient_id else None},
+    task = verify_claim_task.apply_async(
+        args=[payload.claim_text, str(payload.patient_id) if payload.patient_id else None],
+        task_id=job_id,
+        queue="claims",
         priority=9 if payload.priority == "high" else 5,
     )
 
-    # ── Insert pending row in DB ───────────────────────────────────────────
-    insert_claim(claim_id, payload.claim_text, task.id,
-                 str(payload.patient_id) if payload.patient_id else None)
-
-    return ClaimAsyncResponse(
-        request_id=request_id,
-        claim_id=uuid.UUID(claim_id),
-        task_id=task.id,
-        id=task.id,  # Frontend expects 'id'
-        status="pending",
-        poll_url=f"/api/v1/verify/claim/{task.id}",
-        estimated_seconds=15,
-        medical_disclaimer=MEDICAL_DISCLAIMER,
-    )
+    return {
+        "job_id": task.id,
+        "status": "queued",
+        "poll_url": f"/api/v1/jobs/{task.id}",
+        "estimated_seconds": 10,
+    }
 
 
 @router.get("/claim/{task_id}")

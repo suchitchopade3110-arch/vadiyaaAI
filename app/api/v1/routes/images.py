@@ -1,67 +1,96 @@
 import uuid
-from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, status
-from sqlalchemy.ext.asyncio import AsyncSession
+from pathlib import Path
+
+import aiofiles
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, status
 from celery.result import AsyncResult
 from datetime import UTC, datetime
 
-from app.db.session import get_db
 from app.schemas.image import ImageAsyncResponse, AnalysisType
 from app.schemas.job import JobStatus
-from app.services.file_upload import file_upload_service
-from app.workers.image_tasks import analyze_image
+from app.workers.pipeline_tasks import analyze_image_task
 from app.workers.celery_app import celery_app
 from app.core.disclaimer import MEDICAL_DISCLAIMER
 
 router = APIRouter()
 
 VALID_IMAGE_TYPES = {t.value for t in AnalysisType}
+IMAGE_TYPES = {"xray", "ct", "mri", "skin", "pathology"}
+IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".dcm"}
+IMAGE_MAX_BYTES = {
+    ".dcm": 50 * 1024 * 1024,
+    ".jpg": 10 * 1024 * 1024,
+    ".jpeg": 10 * 1024 * 1024,
+    ".png": 10 * 1024 * 1024,
+}
+UPLOAD_ROOT = Path("uploads").resolve()
 
-@router.post("/{analysis_type}", response_model=ImageAsyncResponse, status_code=status.HTTP_202_ACCEPTED)
+
+async def _save_image_upload(file: UploadFile, job_id: str) -> tuple[str, str]:
+    ext = Path(file.filename or "").suffix.lower()
+    if ext not in IMAGE_EXTENSIONS:
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail={
+                "code": "FILE_FORMAT_UNSUPPORTED",
+                "message": f"Extension '{ext}' not allowed. Allowed: {sorted(IMAGE_EXTENSIONS)}",
+            },
+        )
+
+    content = await file.read()
+    max_bytes = IMAGE_MAX_BYTES[ext]
+    if len(content) > max_bytes:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail={
+                "code": "FILE_TOO_LARGE",
+                "message": f"File exceeds {max_bytes // 1024 // 1024}MB limit",
+            },
+        )
+
+    save_dir = UPLOAD_ROOT / "images"
+    save_dir.mkdir(parents=True, exist_ok=True)
+    save_path = save_dir / f"{job_id}{ext}"
+    async with aiofiles.open(save_path, "wb") as handle:
+        await handle.write(content)
+    return str(save_path), ext.lstrip(".")
+
+
+@router.post("/{analysis_type}", status_code=status.HTTP_202_ACCEPTED)
 async def submit_image_analysis(
     analysis_type: str,
     file: UploadFile = File(..., description="Medical image: DICOM, JPG, PNG"),
-    patient_id: str = None,
-    db: AsyncSession = Depends(get_db),
+    patient_id: str = Form(None),
+    clinical_context: str = Form(""),
 ):
     """
     Submit medical image for analysis.
     """
-    if analysis_type not in VALID_IMAGE_TYPES:
+    if analysis_type not in VALID_IMAGE_TYPES and analysis_type not in IMAGE_TYPES:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"Invalid analysis_type '{analysis_type}'. Valid: {VALID_IMAGE_TYPES}",
+            detail={
+                "code": "INVALID_IMAGE_TYPE",
+                "message": f"image_type must be xray|ct|mri|skin|pathology, got '{analysis_type}'",
+            },
         )
 
-    request_id = str(uuid.uuid4())
-    analysis_id = str(uuid.uuid4())
-
-    # Save uploaded file
-    file_path, extension, pipeline_type = await file_upload_service.validate_and_save(
-        file, sub_dir=f"images/{analysis_id}"
-    )
-
-    if pipeline_type != "image":
-        raise HTTPException(
-            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
-            detail=f"File type '.{extension}' is not a medical image format.",
-        )
+    job_id = str(uuid.uuid4())
+    file_path, _extension = await _save_image_upload(file, job_id)
 
     # Dispatch Celery task
-    task = analyze_image.apply_async(
-        args=[analysis_id, file_path, analysis_type, extension],
+    task = analyze_image_task.apply_async(
+        args=[file_path, analysis_type, patient_id, clinical_context],
+        task_id=job_id,
+        queue="images",
     )
 
-    return ImageAsyncResponse(
-        request_id=request_id,
-        analysis_id=uuid.UUID(analysis_id),
-        id=task.id, # Use task_id for consistency in polling
-        task_id=task.id,
-        status="pending",
-        analysis_type=AnalysisType(analysis_type),
-        poll_url=f"/api/v1/analyze/image/{task.id}",
-        estimated_seconds=45,
-        medical_disclaimer=MEDICAL_DISCLAIMER,
-    )
+    return {
+        "job_id": task.id,
+        "status": "queued",
+        "poll_url": f"/api/v1/jobs/{task.id}",
+        "estimated_seconds": 30,
+    }
 
 
 @router.get("/status/{task_id}", response_model=JobStatus)

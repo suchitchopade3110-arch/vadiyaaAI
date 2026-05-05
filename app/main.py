@@ -1,9 +1,12 @@
 import os
 import logging
-from fastapi import FastAPI
+from datetime import UTC, datetime
+
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse
+from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 
 from app.core.config import settings
@@ -73,13 +76,34 @@ app.add_middleware(ErrorHandlerMiddleware)
 app.add_middleware(CorrelationIDMiddleware)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],          # dev-mode: open; tighten in prod via settings
-    allow_credentials=False,      # must be False when allow_origins=["*"]
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=os.getenv("CORS_ORIGINS", "http://localhost:3000").split(","),
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "OPTIONS", "DELETE"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
 app.add_exception_handler(RequestValidationError, validation_exception_handler)
+
+
+async def http_exception_handler(request: Request, exc: HTTPException):
+    detail = exc.detail if isinstance(exc.detail, dict) else {
+        "code": "ERROR",
+        "message": str(exc.detail),
+    }
+    request_id = getattr(request.state, "request_id", "unknown")
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "error": {
+                **detail,
+                "request_id": request_id,
+                "timestamp": datetime.now(UTC).isoformat(),
+            }
+        },
+    )
+
+
+app.add_exception_handler(HTTPException, http_exception_handler)
 app.add_exception_handler(Exception, general_exception_handler)
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.state.limiter = limiter

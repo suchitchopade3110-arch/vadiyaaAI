@@ -16,7 +16,7 @@ from app.workers.celery_app import celery_app
 from app.core.disclaimer import MEDICAL_DISCLAIMER
 from app.core.config import settings
 from typing import List, Optional, Dict, Any, Tuple
-from app.services.preprocessor import validate_file, run_ocr, run_ner, LAB_REGISTRY, LabValue
+from app.services.preprocessor import clean_conditions, validate_file, run_ocr, run_ner, LAB_REGISTRY, LabValue
 from app.ml.predictor import predict_safe
 from app.services.rag_pipeline import rag_pipeline
 from app.workers.db_persist import persist_report, mark_failed

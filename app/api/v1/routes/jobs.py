@@ -1,21 +1,23 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import UUID
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from celery.result import AsyncResult
 
-from app.workers.job_status import get_task_status, revoke_task
-from app.db.session import get_db
+from app.workers.job_status import revoke_task
+from app.workers.celery_app import celery_app
 
 router = APIRouter()
 
 
 class JobStatusResponse(BaseModel):
-    task_id: str
-    state: str
-    info: dict
+    job_id: str
+    status: str
+    progress: float = 0.0
+    result: Optional[dict] = None
+    error: Optional[str] = None
+    completed_at: Optional[str] = None
 
 
 class RecentJobItem(BaseModel):
@@ -45,7 +47,27 @@ async def job_status(task_id: str):
 
     Use this for polling after submitting any /verify or /analyze request.
     """
-    return get_task_status(task_id)
+    result = AsyncResult(task_id, app=celery_app)
+    state = result.state
+    status_map = {
+        "PENDING": "queued",
+        "STARTED": "running",
+        "PROGRESS": "running",
+        "PROCESSING": "running",
+        "RETRY": "running",
+        "SUCCESS": "completed",
+        "FAILURE": "failed",
+        "REVOKED": "failed",
+    }
+    api_status = status_map.get(state, "queued")
+    progress = 1.0 if api_status == "completed" else 0.5 if api_status == "running" else 0.0
+    response = JobStatusResponse(job_id=task_id, status=api_status, progress=progress)
+    if api_status == "completed":
+        response.result = result.result
+        response.completed_at = datetime.now(timezone.utc).isoformat()
+    elif api_status == "failed":
+        response.error = str(result.info) if result.info else "Unknown error"
+    return response
 
 
 @router.delete(
@@ -63,70 +85,21 @@ async def cancel_job(task_id: str, terminate: bool = False):
 
 @router.get(
     "/",
-    response_model=RecentJobsResponse,
+    response_model=List[JobStatusResponse],
     summary="List recent jobs across all pipelines",
 )
 @router.get(
     "",
-    response_model=RecentJobsResponse,
+    response_model=List[JobStatusResponse],
     summary="List recent jobs across all pipelines",
 )
 async def list_recent_jobs(
     limit: int = 20,
-    db: AsyncSession = Depends(get_db),
 ):
     """
-    Returns recent jobs from all three pipelines (reports, images, claims)
-    merged and sorted newest-first. Used by the Job Status Tracker frontend.
+    Celery result backends do not provide portable task listing. The frontend
+    handles an empty list; production can replace this with async_jobs DB reads.
     """
-    from app.models.report import Report
-    from app.models.image_analysis import ImageAnalysis
-    from app.models.claim import Claim
-
-    jobs: List[RecentJobItem] = []
-
-    # ── Reports ──────────────────────────────────────────────────────────────
-    reports_result = await db.execute(
-        select(Report).order_by(Report.created_at.desc()).limit(limit)
-    )
-    for r in reports_result.scalars().all():
-        jobs.append(RecentJobItem(
-            job_id=str(r.id),
-            pipeline="report",
-            celery_task_id=r.celery_task_id,
-            status=r.status if isinstance(r.status, str) else r.status.value,
-            created_at=r.created_at,
-        ))
-
-    # ── Images ───────────────────────────────────────────────────────────────
-    images_result = await db.execute(
-        select(ImageAnalysis).order_by(ImageAnalysis.created_at.desc()).limit(limit)
-    )
-    for img in images_result.scalars().all():
-        jobs.append(RecentJobItem(
-            job_id=str(img.id),
-            pipeline=f"image/{img.image_type if isinstance(img.image_type, str) else img.image_type.value}",
-            celery_task_id=img.celery_task_id,
-            status=img.status if isinstance(img.status, str) else img.status.value,
-            created_at=img.created_at,
-        ))
-
-    # ── Claims ───────────────────────────────────────────────────────────────
-    claims_result = await db.execute(
-        select(Claim).order_by(Claim.created_at.desc()).limit(limit)
-    )
-    for c in claims_result.scalars().all():
-        jobs.append(RecentJobItem(
-            job_id=str(c.id),
-            pipeline="claim",
-            celery_task_id=c.celery_task_id,
-            status=c.status if isinstance(c.status, str) else c.status.value,
-            created_at=c.created_at,
-        ))
-
-    # Sort merged list newest-first
-    jobs.sort(key=lambda j: j.created_at or datetime.min, reverse=True)
-    jobs = jobs[:limit]
-
-    return RecentJobsResponse(jobs=jobs, total=len(jobs))
-
+    if limit < 1 or limit > 100:
+        raise HTTPException(status_code=400, detail={"code": "INVALID_LIMIT", "message": "limit must be 1-100"})
+    return []

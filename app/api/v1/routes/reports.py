@@ -4,30 +4,66 @@ POST /analyze/report/{report_type}
 """
 
 import uuid
-from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, status
-from sqlalchemy.ext.asyncio import AsyncSession
+from pathlib import Path
+
+import aiofiles
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, status
 from celery.result import AsyncResult
 
-from app.db.session import get_db
 from app.schemas.report import ReportAsyncResponse, ReportTypeEnum
 from app.schemas.job import JobStatus
-from app.services.file_upload import file_upload_service
-from app.workers.report_tasks import analyze_report
+from app.workers.pipeline_tasks import analyze_report_task
 from app.workers.celery_app import celery_app
-from app.core.disclaimer import MEDICAL_DISCLAIMER
-from app.workers.db_persist import insert_report
 
 router = APIRouter()
 
 VALID_REPORT_TYPES = {t.value for t in ReportTypeEnum}
+REPORT_EXTENSIONS = {".pdf", ".csv", ".txt"}
+REPORT_MAX_BYTES = {
+    ".pdf": 20 * 1024 * 1024,
+    ".csv": 10 * 1024 * 1024,
+    ".txt": 10 * 1024 * 1024,
+}
+UPLOAD_ROOT = Path("uploads").resolve()
+
+
+async def _save_report_upload(file: UploadFile, job_id: str) -> tuple[str, str]:
+    ext = Path(file.filename or "").suffix.lower()
+    if ext not in REPORT_EXTENSIONS:
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail={
+                "code": "FILE_FORMAT_UNSUPPORTED",
+                "message": f"Extension '{ext}' not allowed. Allowed: {sorted(REPORT_EXTENSIONS)}",
+            },
+        )
+
+    content = await file.read()
+    max_bytes = REPORT_MAX_BYTES[ext]
+    if len(content) > max_bytes:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail={
+                "code": "FILE_TOO_LARGE",
+                "message": f"File exceeds {max_bytes // 1024 // 1024}MB limit",
+            },
+        )
+
+    save_dir = UPLOAD_ROOT / "reports"
+    save_dir.mkdir(parents=True, exist_ok=True)
+    save_path = save_dir / f"{job_id}{ext}"
+    async with aiofiles.open(save_path, "wb") as handle:
+        await handle.write(content)
+    return str(save_path), ext.lstrip(".")
 
 
 @router.post("/{report_type}", status_code=202)
 async def submit_report_analysis(
     report_type: str,
     file: UploadFile = File(..., description="Lab report / clinical note: PDF or CSV"),
-    patient_id: str = None,
-    db: AsyncSession = Depends(get_db),
+    patient_id: str = Form(None),
+    gender: str = Form("male"),
+    age: int = Form(40),
 ):
     """
     Submit lab report / clinical note for analysis.
@@ -46,32 +82,21 @@ async def submit_report_analysis(
             detail=f"Invalid report_type '{report_type}'. Valid: {VALID_REPORT_TYPES}",
         )
 
-    request_id = str(uuid.uuid4())
-    report_id = str(uuid.uuid4())
-
-    # ── Save uploaded file ─────────────────────────────────────────────────
-    file_path, extension, pipeline_type = await file_upload_service.validate_and_save(
-        file, sub_dir=f"reports/{report_id}"
-    )
-
-    if pipeline_type != "text":
-        raise HTTPException(
-            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
-            detail=f"File type '.{extension}' is not a supported report format. Use PDF or CSV.",
-        )
+    job_id = str(uuid.uuid4())
+    file_path, _extension = await _save_report_upload(file, job_id)
 
     # ── Dispatch Celery task ───────────────────────────────────────────────
-    task = analyze_report.apply_async(
-        args=[report_id, file_path, report_type, extension],
+    task = analyze_report_task.apply_async(
+        args=[file_path, patient_id, report_type, gender, age],
+        task_id=job_id,
+        queue="reports",
     )
-
-    # ── Insert pending row in DB ───────────────────────────────────────────
-    insert_report(report_id, report_type, file_path, extension, task.id, patient_id)
 
     return {
         "job_id": task.id,
         "status": "queued",
-        "poll_url": f"/api/v1/jobs/{task.id}"
+        "poll_url": f"/api/v1/jobs/{task.id}",
+        "estimated_seconds": 15,
     }
 
 
