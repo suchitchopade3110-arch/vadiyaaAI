@@ -197,12 +197,19 @@ function ReportAnalyzer() {
             riskLabel:   risk > 80 ? 'High' : risk > 50 ? 'Moderate' : 'Low',
             conditions:  entities.conditions || [],
             medications: entities.medications || [],
-            labValues:   Object.entries(entities.lab_values || {}).map(([k, v]) => ({
-              name: k,
-              value: v?.value ?? v ?? '--',
-              ref: v?.ref || '--',
-              flag: v?.flag || 'NORMAL'
-            })),
+            labValues:   Array.isArray(entities.lab_values) 
+              ? entities.lab_values.map(v => ({
+                  name: v.test,
+                  value: v.result,
+                  ref: v.reference,
+                  flag: v.flag
+                }))
+              : Object.entries(entities.lab_values || {}).map(([k, v]) => ({
+                  name: k,
+                  value: v?.value ?? v ?? '--',
+                  ref: v?.ref || '--',
+                  flag: v?.flag || 'NORMAL'
+                })),
             anomalies:   data.anomalies || [],
             shap:        (data.risk_factors || data.shap_values || []).map(f => ({ 
               factor: f?.feature || f?.factor || 'Unknown', 

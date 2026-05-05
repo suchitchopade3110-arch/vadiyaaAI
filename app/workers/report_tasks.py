@@ -15,7 +15,7 @@ from celery import Task
 from app.workers.celery_app import celery_app
 from app.core.disclaimer import MEDICAL_DISCLAIMER
 from app.core.config import settings
-from typing import List
+from typing import List, Optional, Dict, Any, Tuple
 from app.services.preprocessor import validate_file, run_ocr, run_ner, LAB_REGISTRY, LabValue
 from app.ml.predictor import predict_safe
 from app.services.rag_pipeline import rag_pipeline
@@ -30,79 +30,78 @@ class ReportAnalysisTask(Task):
     def on_failure(self, exc, task_id, args, kwargs, einfo):
         logger.error(f"Report task {task_id} failed: {exc}")
 
+# Map anomalies → conditions (NOT from commentary text)
+ANOMALY_TO_CONDITION = {
+    ("hba1c", "HIGH"):              "Uncontrolled Diabetes Mellitus",
+    ("fasting blood sugar", "HIGH"): "Hyperglycemia / Diabetes Suspected",
+    ("hemoglobin", "LOW"):          "Anemia",
+    ("iron", "LOW"):                "Iron Deficiency",
+    ("vitamin b12", "LOW"):         "Vitamin B12 Deficiency Anemia",
+    ("cholesterol", "HIGH"):        "Hypercholesterolemia",
+    ("triglyceride", "HIGH"):       "Hypertriglyceridemia",
+    ("wbc count", "HIGH"):          "Leukocytosis (Infection Possible)",
+    ("malarial parasite", "ABNORMAL"): "Active Malarial Infection",
+    ("hbsag", "ABNORMAL"):          "Hepatitis B Infection (Reactive)",
+    ("hiv", "ABNORMAL"):            "HIV Reactive",
+    ("creatinine", "HIGH"):         "Impaired Kidney Function",
+    ("tsh", "HIGH"):                "Hypothyroidism Suspected",
+    ("tsh", "LOW"):                 "Hyperthyroidism Suspected",
+    ("urine glucose", "ABNORMAL"):  "Glycosuria (Diabetes Marker)",
+}
+
+def classify_anomaly(lv: LabValue, gender: str = "male") -> Optional[dict]:
+    from app.services.preprocessor import resolve_reference
+    
+    if lv.value_type == "binary":
+        if lv.is_abnormal:
+            return {"field": lv.name, "value": lv.result_text, "unit": "", "reference": "Absent", "direction": "ABNORMAL", "severity": "HIGH", "flag": "⚠️ ABNORMAL"}
+        return None
+    
+    if lv.value_type == "qualitative":
+        if lv.is_abnormal:
+            return {"field": lv.name, "value": lv.result_text, "unit": "", "reference": "Normal", "direction": "ABNORMAL", "severity": "MODERATE", "flag": "⚠️ ABNORMAL MORPHOLOGY"}
+        return None
+    
+    if lv.value is None: return None
+    
+    ref_low, ref_high, source = resolve_reference(lv.name, gender, pdf_ref_low=lv.ref_low, pdf_ref_high=lv.ref_high)
+    if ref_low is None: return None
+    
+    val = lv.value
+    if val < ref_low:
+        pct = round(((ref_low - val) / ref_low) * 100, 1)
+        sev = "CRITICAL" if pct > 50 else "HIGH" if pct > 25 else "MODERATE"
+        return {"field": lv.name, "value": lv.display_value or val, "unit": lv.unit, "reference": f"{ref_low}-{ref_high}", "direction": "LOW", "severity": sev, "pct_deviation": pct, "flag": f"⬇️ {sev}"}
+    elif val > ref_high:
+        pct = round(((val - ref_high) / ref_high) * 100, 1)
+        sev = "CRITICAL" if pct > 50 else "HIGH" if pct > 25 else "MODERATE"
+        return {"field": lv.name, "value": lv.display_value or val, "unit": lv.unit, "reference": f"{ref_low}-{ref_high}", "direction": "HIGH", "severity": sev, "pct_deviation": pct, "flag": f"⬆️ {sev}"}
+    return None
+
+def extract_conditions_from_anomalies(anomalies: List[dict]) -> List[str]:
+    conditions = []
+    for a in anomalies:
+        key = (a["field"].lower(), a["direction"])
+        if key in ANOMALY_TO_CONDITION:
+            if ANOMALY_TO_CONDITION[key] not in conditions:
+                conditions.append(ANOMALY_TO_CONDITION[key])
+    return conditions[:10]
+
 def detect_anomalies(lab_values: List[LabValue], gender: str = "male") -> List[dict]:
-    """
-    Compare extracted lab values against LAB_REGISTRY reference ranges,
-    or use the pre-computed flags from the PDF table parser (Layer 1).
-    Returns list of anomalies with severity.
-    """
     anomalies = []
-
     for lv in lab_values:
-        # If Layer 1 already flagged this as anomalous
-        if lv.flag and lv.status != "NORMAL":
-            anomalies.append({
-                "field": lv.name,
-                "value": lv.value,
-                "unit": lv.unit,
-                "reference": f"{lv.ref_low} - {lv.ref_high}",
-                "direction": "LOW" if lv.value < (lv.ref_low or 0) else "HIGH",
-                "severity": lv.status,
-                "pct_deviation": lv.pct_deviation or 0.0,
-                "flag": lv.flag
-            })
-            continue
-            
-        # Layer 2 Fallback: Check registry if no flag is set (or if normal, no need to flag)
-        if lv.flag: 
-            continue # It was processed by Layer 1 and was NORMAL
-            
-        config = LAB_REGISTRY.get(lv.name.lower())
-        if not config:
-            continue
-
-        # Get gender-specific range if available
-        range_key = f"normal_range_{gender}" 
-        ref = config.get(range_key) or config.get("normal_range")
-        if not ref:
-            continue
-
-        low, high = ref
-        value = lv.value
-
-        if value < low:
-            pct_below = ((low - value) / low) * 100
-            severity = "CRITICAL" if pct_below > 50 else \
-                       "HIGH" if pct_below > 25 else "MODERATE"
-            anomalies.append({
-                "field": lv.name,
-                "value": value,
-                "unit": lv.unit,
-                "reference": f"{low} - {high}",
-                "direction": "LOW",
-                "severity": severity,
-                "pct_deviation": round(pct_below, 1),
-                "flag": f"⬇️ {severity}"
-            })
-        elif value > high:
-            pct_above = ((value - high) / high) * 100
-            severity = "CRITICAL" if pct_above > 50 else \
-                       "HIGH" if pct_above > 25 else "MODERATE"
-            anomalies.append({
-                "field": lv.name,
-                "value": value,
-                "unit": lv.unit,
-                "reference": f"{low} - {high}",
-                "direction": "HIGH",
-                "severity": severity,
-                "pct_deviation": round(pct_above, 1),
-                "flag": f"⬆️ {severity}"
-            })
-
+        anomaly = classify_anomaly(lv, gender)
+        if anomaly:
+            anomalies.append(anomaly)
     return anomalies
 
 def adjust_risk_for_anomalies(base_score: float, anomalies: list) -> float:
-    """Boost risk score if CRITICAL or HIGH anomalies exist."""
+    """Boost risk score if CRITICAL or HIGH anomalies exist, or scale down if zero."""
+    if len(anomalies) == 0:
+        # XGBoost baseline is ~30-35 even for normal data. 
+        # Scale it down to a "Healthy" range (0-15) if zero anomalies.
+        return round(base_score * 0.15, 1)
+
     severities = [a["severity"] for a in anomalies]
     if "CRITICAL" in severities:
         return max(base_score, 75.0)   # CRITICAL → minimum High risk
@@ -117,10 +116,29 @@ def deduplicate_anomalies(anomalies: list) -> list:
         if key not in seen:
             seen[key] = a
         else:
-            # Keep the more detailed one
             if len(a.get("explanation", "")) > len(seen[key].get("explanation", "")):
                 seen[key] = a
     return list(seen.values())
+
+def serialize_lab_value(lv: LabValue, anomaly_lookup: dict) -> dict:
+    flag = "NORMAL"
+    ref_str = "--"
+    if lv.name in anomaly_lookup:
+        flag = anomaly_lookup[lv.name]["flag"]
+        ref_str = anomaly_lookup[lv.name]["reference"]
+    else:
+        if lv.ref_low is not None and lv.ref_high is not None:
+            ref_str = f"{lv.ref_low} - {lv.ref_high}"
+            flag = lv.flag or "NORMAL"
+            
+    return {
+        "test": lv.name,
+        "result": lv.display_value or str(lv.value or ""),
+        "unit": lv.unit,
+        "reference": ref_str,
+        "flag": flag,
+        "value_type": lv.value_type
+    }
 
 
 @celery_app.task(
@@ -148,43 +166,41 @@ def analyze_report(self, report_id: str, file_path: str, report_type: str, file_
         self.update_state(state="PROGRESS", meta={"step": "ner", "pct": 35})
         ner_result = run_ner(raw_text)
         
-        if report_type == "discharge":
-            ner_result.lab_values = []
-
+        if report_type == "lab":
+            from app.services.preprocessor import UniversalValueExtractor
+            extractor = UniversalValueExtractor()
+            ner_result.lab_values = extractor.extract_all(raw_text)
+            
         registry_anomalies = detect_anomalies(ner_result.lab_values)
+        
+        if report_type == "lab":
+            # Universal Layer 5: Extract conditions ONLY from anomalies
+            ner_result.conditions = extract_conditions_from_anomalies(registry_anomalies)
+        else:
+            ner_result.conditions = clean_conditions(ner_result.conditions)
+
         anomaly_lookup = {a["field"]: a for a in registry_anomalies}
 
-        feature_dict = {}
-        for lv in ner_result.lab_values:
-            flag = "NORMAL"
-            ref_str = "--"
-            if lv.name in anomaly_lookup:
-                flag = anomaly_lookup[lv.name]["flag"]
-                ref_str = anomaly_lookup[lv.name]["reference"]
-            else:
-                if lv.ref_low is not None and lv.ref_high is not None:
-                    ref_str = f"{lv.ref_low} - {lv.ref_high}"
-                    flag = lv.flag or "NORMAL"
-                else:
-                    config = LAB_REGISTRY.get(lv.name.lower())
-                    if config:
-                        ref_range = config.get("normal_range_male") or config.get("normal_range")
-                        if ref_range:
-                            ref_str = f"{ref_range[0]} - {ref_range[1]}"
-            feature_dict[lv.name] = {"value": lv.value, "unit": lv.unit, "ref": ref_str, "flag": flag}
+        # Flat list for frontend table
+        lab_values_serialized = [serialize_lab_value(lv, anomaly_lookup) for lv in ner_result.lab_values]
         
+        # Numeric dict for ML features
+        ml_features = {lv.name: lv.value for lv in ner_result.lab_values if lv.value is not None}
+        
+        if not ner_result.conditions and report_type == "lab" and len(registry_anomalies) == 0:
+            ner_result.conditions = ["✅ No conditions detected — all values within normal range"]
+
         entities = {
             "conditions": ner_result.conditions,
             "medications": ner_result.medications,
-            "lab_values": feature_dict,
+            "lab_values": lab_values_serialized,
             "procedures": [],
             "_source": "clinicalbert-ner"
         }
 
         # Step 3: XGBoost via predict_safe()
         self.update_state(state="PROGRESS", meta={"step": "xgboost", "pct": 55})
-        feature_dict = entities.get("lab_values", {})
-        ml_result    = predict_safe(feature_dict)
+        ml_result    = predict_safe(ml_features)
         risk_score   = ml_result["risk_score"]
         confidence   = ml_result["confidence"]
         shap_values  = ml_result["shap_values"]

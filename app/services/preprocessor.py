@@ -41,7 +41,7 @@ from typing import Optional
 
 class LabValue(BaseModel):
     name: str
-    value: float
+    value: Optional[float] = None
     unit: str
     raw_text: str = ""
     ref_low: Optional[float] = None
@@ -49,6 +49,12 @@ class LabValue(BaseModel):
     flag: Optional[str] = None
     status: Optional[str] = None
     pct_deviation: Optional[float] = None
+    # Universal additions
+    value_type: str = "numeric"  # numeric, binary, qualitative, lt_gt, ratio
+    display_value: str = ""
+    result_text: str = ""
+    is_abnormal: bool = False
+    prefix: str = ""
 
 
 class DicomOutput(BaseModel):
@@ -469,16 +475,244 @@ def run_ner(text: str) -> NerOutput:
         return _regex_ner_fallback(text)
 
 
+JUNK_WORDS = {
+    "sis", "inc", "cles", "tion", "ment", "ness", "ity",
+    "terol", "aemia", "emic", "ous", "ious", "tory",
+    "page break", "general healt", "blood loss",  
+    "an lack", "def ine", "ate def", "renal f",
+    "cocgl birth", "her hb", "lif jm", "moc bo",
+    "vit amin", "ant ibody", "emodilut ion",
+}
+
 def clean_conditions(raw: List[str]) -> List[str]:
-    return [
-        c for c in raw
-        if len(c) > 5              # remove "terol", "sis", "inc", "cles"
-        and not c.startswith("#")  # remove ##tokens
-        and not c.isnumeric()      # remove numbers
-        and c.lower() not in       # remove generic words
-            {"condition", "such disorders", "most disorders",
-             "some hepatocellular diseases", "inc", "cies"}
+    # Legacy NER conditions cleanup
+    cleaned = []
+    for c in raw:
+        c = c.strip()
+        if "##" in c: continue
+        if len(c) < 5: continue
+        cleaned.append(c.title())
+    return list(dict.fromkeys(cleaned))[:10]
+
+# ════════════════════════════════════════════════════════════
+# SECTION 6 — UNIVERSAL LAB PIPELINE (LAYER 1-3)
+# ════════════════════════════════════════════════════════════
+
+class ReportClassifier:
+    REPORT_TYPES = {
+        "lab_structured": [
+            "biological ref", "ref. interval", "reference range",
+            "normal range", "test result unit"
+        ],
+        "discharge_summary": [
+            "discharge", "final diagnosis", "admitted",
+            "clinical summary", "advice on discharge"
+        ],
+        "radiology": [
+            "impression:", "findings:", "x-ray", "mri", "ct scan",
+            "ultrasound", "echo"
+        ],
+        "microbiology": [
+            "culture", "sensitivity", "organism", "colony",
+            "gram stain", "mcs"
+        ],
+        "pathology_narrative": [
+            "peripheral smear", "biopsy", "histopathology",
+            "morphology"
+        ],
+        "hplc_electrophoresis": [
+            "peak name", "retention time", "area %",
+            "hplc", "electrophoresis"
+        ],
+    }
+
+    PANEL_MARKERS = [
+        "complete blood count", "cbc", "lipid profile", "lipid panel",
+        "liver function", "lft", "kidney function", "renal function", "kft",
+        "thyroid function", "tft", "iron studies", "iron panel",
+        "hba1c", "glycosylated hemoglobin", "immunoassay", "hormone",
+        "urine routine", "urinalysis", "biochemistry", "metabolic panel",
+        "coagulation", "pt inr", "blood group", "abo", "hb electrophoresis",
+        "tumor markers", "vitamin",
     ]
+
+    COMMENTARY_MARKERS = [
+        "explanation:", "summary and uses:", "limitations:",
+        "interpretation:", "additional information:",
+        "reference:", "important instructions",
+        "increased in", "decreased in",
+        "clinical significance",
+        "note:", "comments:", "remarks:",
+    ]
+
+    def classify(self, text: str) -> dict:
+        text_lower = text.lower()
+        report_type = "unknown"
+        for rtype, markers in self.REPORT_TYPES.items():
+            if sum(1 for m in markers if m in text_lower) >= 2:
+                report_type = rtype
+                break
+        panels = [p for p in self.PANEL_MARKERS if p in text_lower]
+        has_table = bool(re.search(r'\d+\.?\d*\s+[a-zA-Z/%µ]+\s+\d+\.?\d*\s*[-–]\s*\d+\.?\d*', text))
+        num_pages = len(re.findall(r'page \d+ of \d+', text_lower))
+        return {
+            "report_type": report_type,
+            "panels": panels,
+            "has_table": has_table,
+            "num_pages": max(num_pages, 1),
+            "is_multi_panel": len(panels) > 1,
+        }
+
+def strip_commentary(text: str) -> str:
+    lines = text.split('\n')
+    cleaned_lines = []
+    for line in lines:
+        line_lower = line.lower()
+        if any(m in line_lower for m in ReportClassifier.COMMENTARY_MARKERS):
+            continue
+        cleaned_lines.append(line)
+    return '\n'.join(cleaned_lines)
+
+REFERENCE_REGISTRY = {
+    "hemoglobin": {"male": (13.5, 17.5), "female": (12.0, 15.5), "unit": "g/dL"},
+    "wbc count": {"all": (4000, 10000), "unit": "/cmm"},
+    "platelet count": {"all": (150000, 410000), "unit": "/cmm"},
+    "hematocrit": {"male": (40, 49), "female": (36, 46), "unit": "%"},
+    "mcv": {"all": (83, 101), "unit": "fL"},
+    "mch": {"all": (27.1, 32.5), "unit": "pg"},
+    "mchc": {"all": (32.5, 36.7), "unit": "g/dL"},
+    "rdw": {"all": (11.6, 14.0), "unit": "%"},
+    "cholesterol": {"all": (0, 200), "unit": "mg/dL"},
+    "triglyceride": {"all": (0, 150), "unit": "mg/dL"},
+    "hdl cholesterol": {"male": (40, 999), "female": (50, 999), "unit": "mg/dL"},
+    "direct ldl": {"all": (0, 100), "unit": "mg/dL"},
+    "fasting blood sugar": {"all": (74, 106), "unit": "mg/dL"},
+    "hba1c": {"all": (0, 6.5), "unit": "%"},
+    "creatinine": {"male": (0.66, 1.25), "female": (0.50, 1.10), "unit": "mg/dL"},
+    "tsh": {"all": (0.35, 4.94), "unit": "µIU/mL"},
+    "iron": {"all": (49, 181), "unit": "µg/dL"},
+    "tibc": {"all": (261, 462), "unit": "µg/dL"},
+    "ferritin": {"male": (22, 322), "female": (10, 291), "unit": "ng/mL"},
+    "vitamin b12": {"all": (187, 833), "unit": "pg/mL"},
+    "25(oh) vitamin d": {"all": (30, 100), "unit": "ng/mL"},
+}
+
+def resolve_reference(name: str, gender: str = "male", age: int = 40, pdf_ref_low: float = None, pdf_ref_high: float = None):
+    if pdf_ref_low is not None and pdf_ref_high is not None:
+        return pdf_ref_low, pdf_ref_high, "pdf"
+    name_l = name.lower().strip()
+    for reg_key, config in REFERENCE_REGISTRY.items():
+        if reg_key in name_l or name_l in reg_key:
+            g_key = gender if gender in config else "all"
+            if g_key in config:
+                low, high = config[g_key]
+                return low, high, "registry"
+    return None, None, "unknown"
+
+class UniversalValueExtractor:
+    NUMERIC_PATTERN = re.compile(
+        r'([A-Za-z][A-Za-z0-9\s\(\)/\-]{2,50}?)\s+'
+        r'[HL]?\s*(<\s*|>\s*)?(\d+\.?\d*)\s+'
+        r'([µuμa-zA-Z%°/]+(?:[/][a-zA-Z]+)?)\s+'
+        r'(\d+\.?\d*)\s*[-–]\s*(\d+\.?\d*)',
+        re.MULTILINE
+    )
+    BINARY_MAP = {
+        "urine glucose": ["present", "positive", "+"],
+        "urine protein": ["present", "positive", "+"],
+        "hbsag": ["reactive"],
+        "hiv": ["reactive"],
+        "malarial parasite": ["detected", "present", "positive"],
+    }
+    QUALITATIVE_ABNORMAL = [
+        "hypochromic", "microcytic", "macrocytic", "poikilocytosis",
+        "anisocytosis", "blasts", "immature", "abnormal morphology"
+    ]
+    LT_GT_PATTERN = re.compile(
+        r'([A-Za-z][A-Za-z0-9\s\(\)/\-B]{2,40}?)\s+'
+        r'[HL]?\s*([<>])\s*(\d+\.?\d*)\s+'
+        r'([µuμa-zA-Z%/]+)\s+'
+        r'(\d+\.?\d*)\s*[-–]\s*(\d+\.?\d*)',
+        re.MULTILINE
+    )
+
+    def extract_all(self, text: str) -> List[LabValue]:
+        stripped = strip_commentary(text)
+        results = self._extract_numeric(stripped)
+        results += self._extract_binary(stripped)
+        results += self._extract_qualitative(stripped)
+        results += self._extract_lt_gt(stripped)
+        return self._deduplicate(results)
+
+    def _extract_numeric(self, text: str) -> List[LabValue]:
+        results = []
+        for match in self.NUMERIC_PATTERN.finditer(text):
+            name = match.group(1).strip()
+            prefix = match.group(2) or ""
+            value = float(match.group(3))
+            unit = match.group(4).strip()
+            ref_low = float(match.group(5))
+            ref_high = float(match.group(6))
+            if not self._is_valid_name(name): continue
+            results.append(LabValue(
+                name=name, value=value, unit=unit,
+                ref_low=ref_low, ref_high=ref_high,
+                prefix=prefix.strip(), value_type="numeric"
+            ))
+        return results
+
+    def _extract_binary(self, text: str) -> List[LabValue]:
+        results = []
+        for test_name, abnormal_vals in self.BINARY_MAP.items():
+            if test_name not in text.lower(): continue
+            pattern = re.compile(rf'{re.escape(test_name)}\s+(\w[\w\s(+)\-]*)', re.IGNORECASE)
+            match = pattern.search(text)
+            if not match: continue
+            res_text = match.group(1).strip()
+            is_ab = any(av in res_text.lower() for av in abnormal_vals)
+            results.append(LabValue(
+                name=test_name.title(), unit="", result_text=res_text,
+                value_type="binary", is_abnormal=is_ab
+            ))
+        return results
+
+    def _extract_qualitative(self, text: str) -> List[LabValue]:
+        results = []
+        pattern = re.compile(r'(RBC Morphology|WBC Morphology|Peripheral Smear)\s+([A-Za-z\s]+)', re.IGNORECASE)
+        for match in pattern.finditer(text):
+            name, finding = match.group(1).strip(), match.group(2).strip()
+            is_ab = any(ab in finding.lower() for ab in self.QUALITATIVE_ABNORMAL)
+            results.append(LabValue(
+                name=name, unit="", result_text=finding,
+                value_type="qualitative", is_abnormal=is_ab
+            ))
+        return results
+
+    def _extract_lt_gt(self, text: str) -> List[LabValue]:
+        results = []
+        for match in self.LT_GT_PATTERN.finditer(text):
+            name, op, val = match.group(1).strip(), match.group(2), float(match.group(3))
+            unit, low, high = match.group(4).strip(), float(match.group(5)), float(match.group(6))
+            results.append(LabValue(
+                name=name, value=val-0.01 if op=="<" else val+0.01,
+                unit=unit, ref_low=low, ref_high=high,
+                prefix=op, display_value=f"{op}{val}", value_type="lt_gt"
+            ))
+        return results
+
+    def _is_valid_name(self, name: str) -> bool:
+        if len(name) < 3 or len(name) > 60: return False
+        if not name[0].isalpha(): return False
+        if name.lower().strip() in {"page", "date", "patient", "sample"}: return False
+        return True
+
+    def _deduplicate(self, values: List[LabValue]) -> List[LabValue]:
+        seen = {}
+        for lv in values:
+            key = lv.name.lower().strip()
+            if key not in seen or (lv.ref_low is not None and seen[key].ref_low is None):
+                seen[key] = lv
+        return list(seen.values())
 
 def _parse_ner_entities(entities: List[Dict], raw_text: str) -> NerOutput:
     """Map ClinicalBERT entity groups → NerOutput contract."""
@@ -779,7 +1013,7 @@ def extract_lab_table_from_pdf(text: str) -> List[LabValue]:
         else:
             pct = 0.0
             status = "NORMAL"
-            flag = "✓"
+            flag = "NORMAL"
         
         results.append(LabValue(
             name=name,
