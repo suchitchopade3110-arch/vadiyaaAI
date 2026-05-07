@@ -47,6 +47,9 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str = ""
     GROQ_API_KEY: str = ""
     GROQ_MODEL: str = "llama-3.1-8b-instant"
+    CHROMADB_HOST: str = "localhost"
+    CHROMADB_PORT: int = 8001
+    CHROMADB_URL: str = "http://localhost:8001"
     CHROMA_PATH: str = os.path.expanduser("~/vaidyaAI_week1_clean/chromadb")
     OLLAMA_BASE_URL: str = "http://localhost:11434"
     LLM_PROVIDER: str = "openai"  # "openai" | "ollama"
