@@ -2,9 +2,14 @@ import uuid
 from pathlib import Path
 
 import aiofiles
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException, status
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, status, Depends
 from celery.result import AsyncResult
-from datetime import UTC, datetime
+from datetime import timezone, datetime
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.db.session import get_db
+
+UTC = timezone.utc
 
 from app.schemas.image import ImageAsyncResponse, AnalysisType
 from app.schemas.job import JobStatus

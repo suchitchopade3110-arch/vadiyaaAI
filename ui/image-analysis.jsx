@@ -3,12 +3,12 @@
 // image-analysis.jsx — Image Analysis page
 
 const { useState, useRef, useEffect } = React;
-const API_BASE = 'http://localhost:8000/api/v1';
+const API_BASE = `${window.location.origin}/api/v1`;
 
 const IMAGE_STEPS = [
   { label: 'Normalization',      desc: 'Resize, denoise, DICOM windowing' },
   { label: 'Segmentation',       desc: 'ROI detection & organ masking' },
-  { label: 'Classification',     desc: 'ResNet / EfficientNet inference' },
+  { label: 'Classification',     desc: '14-class NIH chest X-ray inference' },
   { label: 'GradCAM',            desc: 'Gradient-weighted class activation map' },
   { label: 'LLM Explanation',    desc: 'Radiological narrative generation' },
 ];
@@ -125,15 +125,29 @@ function ImagePreview({ file }) {
 }
 
 function FindingRow({ finding }) {
-  const sevColor = { Moderate: 'oklch(0.75 0.14 60)', Mild: 'oklch(0.46 0.19 145)', Severe: 'oklch(0.65 0.20 25)', Uncertain: 'oklch(0.55 0.01 260)' };
-  const c = sevColor[finding.severity] || 'var(--text-secondary)';
+  const severityKey = String(finding.severity || 'MODERATE').toUpperCase();
+  const sevColor = {
+    CRITICAL: 'oklch(0.65 0.20 25)',
+    HIGH: 'oklch(0.70 0.18 35)',
+    MODERATE: 'oklch(0.75 0.14 60)',
+    LOW: 'oklch(0.46 0.19 145)',
+    MILD: 'oklch(0.46 0.19 145)',
+    SEVERE: 'oklch(0.65 0.20 25)',
+    UNCERTAIN: 'oklch(0.55 0.01 260)',
+  };
+  const c = sevColor[severityKey] || 'var(--text-secondary)';
   return (
     <div style={{ padding: '12px', background: 'var(--bg-elevated)', borderRadius: '7px', border: '1px solid var(--border)', marginBottom: '8px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
         <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>{finding.label}</span>
-        <span style={{ fontSize: '11px', fontWeight: 700, color: c, background: `${c}18`, padding: '2px 8px', borderRadius: '4px', border: `1px solid ${c}40` }}>{finding.severity}</span>
+        <span style={{ fontSize: '11px', fontWeight: 700, color: c, background: `${c}18`, padding: '2px 8px', borderRadius: '4px', border: `1px solid ${c}40` }}>{severityKey}</span>
       </div>
       <ConfidenceMeter value={finding.confidence} label="Detection Confidence" />
+      {finding.clinicalMeaning && (
+        <div style={{ marginTop: '8px', fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.45 }}>
+          {finding.clinicalMeaning}
+        </div>
+      )}
     </div>
   );
 }
@@ -147,6 +161,7 @@ function ImageAnalysis() {
   const [step, setStep]                 = useState(0);
   const [result, setResult]             = useState(null);
   const [elapsed, setElapsed]           = useState(0);
+  const [serverAnalysisId, setServerAnalysisId] = useState('');
   const timerRef = useRef(null);
   const jobId = useRef('JOB-' + Math.floor(Math.random() * 900 + 100)).current;
 
@@ -189,14 +204,17 @@ function ImageAnalysis() {
       }
 
       const submitData = await submitRes.json();
-      const analysisId = submitData.id;
+      const analysisId = submitData.job_id || submitData.id || submitData.task_id;
+      setServerAnalysisId(analysisId);
 
       // Poll for result
       const poll = async () => {
         try {
           const pollRes = await fetch(`${API_BASE || '/api/v1'}/analyze/image/${analysisId}`);
           const data = await pollRes.json();
-          
+
+          const payload = data.result || data;
+
           if (data.status === 'PROCESSING' || data.status === 'PENDING' || data.status === 'processing' || data.status === 'pending') {
             setTimeout(poll, 2000);
             return;
@@ -205,11 +223,33 @@ function ImageAnalysis() {
           // Done — map to display format
           clearInterval(timerRef.current);
           setStep(IMAGE_STEPS.length);
+          const classification = payload.image_classification || payload.classification || null;
+          const probabilities = classification?.probabilities || {};
+          const allFindings = classification?.all_findings || [];
+          const detectedFindings = allFindings.length > 0
+            ? allFindings
+                .filter((f) => f.detected)
+                .map((f) => ({
+                  label: f.label,
+                  confidence: Math.round(Number(f.probability || 0) * 10000) / 100,
+                  severity: f.severity || 'MODERATE',
+                  clinicalMeaning: f.clinical_meaning || '',
+                }))
+            : Object.entries(probabilities).map(([label, confidence]) => ({
+                label,
+                confidence: Math.round(Number(confidence || 0) * 10000) / 100,
+                severity: Number(confidence || 0) > 0.5 ? 'Moderate' : 'Mild',
+              }));
           setResult({
-            ...data,
-            findings:  data.findings || [],
-            roi:       data.roi || [],
-            citations: (data.citations || data.sources || []).map(c => ({
+            ...payload,
+            classification,
+            confidence: payload.confidence?.score
+              ?? payload.confidence_score
+              ?? payload.risk_score
+              ?? (classification?.confidence != null ? Number(classification.confidence) * 100 : 0),
+            findings:  payload.findings || detectedFindings,
+            roi:       payload.roi || [],
+            citations: (payload.citations || payload.sources || []).map(c => ({
               title: c.title || c.source_id || 'Source',
               source: c.url || c.source || '',
               snippet: c.excerpt || c.snippet || '',
@@ -232,7 +272,7 @@ function ImageAnalysis() {
 
   const reset = () => {
     clearInterval(timerRef.current);
-    setPhase('idle'); setFile(null); setFileError(''); setStep(0); setResult(null); setElapsed(0);
+    setPhase('idle'); setFile(null); setFileError(''); setStep(0); setResult(null); setElapsed(0); setServerAnalysisId('');
   };
 
   const typeOptions = [
@@ -292,27 +332,65 @@ function ImageAnalysis() {
 
       {phase === 'done' && result && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <Card>
-            <ResultHeader status={result.status} jobId={jobId} elapsed={elapsed} />
-            {result.uncertainty && (
-              <div style={{ marginTop: '12px' }}>
-                <UncertaintyBanner message="Low confidence — findings require radiologist review before clinical use." />
+          <div style={{ display: 'flex', gap: '16px', alignItems: 'stretch', flexWrap: 'wrap' }}>
+            <Card style={{ flex: 1, minWidth: '300px' }}>
+              <ResultHeader status={result.status} jobId={jobId} elapsed={elapsed} />
+              {result.uncertainty && (
+                <div style={{ marginTop: '12px' }}>
+                  <UncertaintyBanner message="Low confidence — findings require radiologist review before clinical use." />
+                </div>
+              )}
+              <div style={{ marginTop: '16px', fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.7, padding: '14px', background: 'var(--bg-elevated)', borderRadius: '7px', border: '1px solid var(--border)' }}>
+                <strong style={{ display: 'block', marginBottom: '6px', color: 'var(--text-primary)' }}>Radiological Impression</strong>
+                {result.impression}
               </div>
-            )}
-            <div style={{ marginTop: '16px', fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.7, padding: '14px', background: 'var(--bg-elevated)', borderRadius: '7px', border: '1px solid var(--border)' }}>
-              <strong style={{ display: 'block', marginBottom: '6px', color: 'var(--text-primary)' }}>Radiological Impression</strong>
-              {result.impression}
-            </div>
-            <div style={{ marginTop: '16px' }}>
-              <ConfidenceMeter value={result.confidence} label="Overall Confidence" />
-            </div>
-          </Card>
+              <div style={{ marginTop: '16px' }}>
+                <ConfidenceMeter value={result.confidence} label="Overall Confidence" />
+              </div>
+            </Card>
+            {window.ReportQRWidget && <ReportQRWidget reportId={serverAnalysisId} patientId={patientId} />}
+          </div>
 
           <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
             <div style={{ flex: '1', minWidth: '260px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <Card>
                 <SectionLabel>Classification Findings</SectionLabel>
-                {result.findings?.map((f, i) => <FindingRow key={i} finding={f} />)}
+                {result.classification?.primary_finding && (
+                  <div style={{ marginBottom: '12px', padding: '10px 12px', background: 'var(--bg-elevated)', borderRadius: '7px', border: '1px solid var(--border)' }}>
+                    <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px' }}>Primary Finding</div>
+                    <div style={{ fontSize: '14px', fontWeight: 800, color: 'var(--text-primary)' }}>
+                      {result.classification.primary_finding}
+                    </div>
+                    {typeof result.classification.confidence === 'number' && (
+                      <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                        {(Number(result.classification.confidence) * 100).toFixed(1)}%
+                      </div>
+                    )}
+                  </div>
+                )}
+                {result.findings?.length > 0 ? (
+                  result.findings.map((f, i) => <FindingRow key={i} finding={f} />)
+                ) : result.classification ? (
+                  <div style={{ padding: '12px', background: 'var(--bg-elevated)', borderRadius: '7px', border: '1px solid var(--border)' }}>
+                    <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '8px' }}>
+                      {result.classification.label || result.classification.top_class || result.classification.primary_finding || 'Classification Result'}
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      {(result.classification.all_findings || []).map((finding) => (
+                        <div key={finding.label} style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', fontSize: '12px', color: 'var(--text-secondary)' }}>
+                          <span>{finding.label}</span>
+                          <span style={{ fontFamily: 'var(--font-mono)' }}>{(Number(finding.probability || 0) * 100).toFixed(1)}%</span>
+                        </div>
+                      ))}
+                      {!result.classification.all_findings?.length && Object.entries(result.classification.probabilities || {}).map(([label, confidence]) => (
+                        <div key={label} style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', fontSize: '12px', color: 'var(--text-secondary)' }}>
+                          <span>{label}</span>
+                          <span style={{ fontFamily: 'var(--font-mono)' }}>{(Number(confidence || 0) * 100).toFixed(1)}%</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
               </Card>
               {result.roi.length > 0 && (
                 <Card>

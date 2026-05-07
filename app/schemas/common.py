@@ -1,6 +1,7 @@
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
-from datetime import UTC, datetime
+from datetime import timezone, datetime
+UTC = timezone.utc
 
 class BaseResponse(BaseModel):
     request_id: str

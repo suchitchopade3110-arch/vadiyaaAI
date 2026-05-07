@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>VaidyaAI Report Preview</title>
+<style>
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: #f6faf8;
+  color: #17211b;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+.card {
+  width: min(100%, 440px);
+  background: #fff;
+  border: 1px solid #d9e7df;
+  border-radius: 8px;
+  padding: 24px;
+  box-shadow: 0 18px 60px rgba(20, 83, 45, 0.12);
+}
+.header { display: flex; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
+.eyebrow { font-size: 11px; font-weight: 800; color: #15803d; text-transform: uppercase; letter-spacing: 0.08em; }
+h1 { margin: 4px 0 0; font-size: 22px; line-height: 1.15; }
+.meta { color: #64746b; font-size: 13px; margin-top: 4px; }
+.badge { display: inline-flex; padding: 5px 10px; border-radius: 6px; font-size: 12px; font-weight: 800; text-transform: uppercase; }
+.routine { color: #166534; background: #dcfce7; border: 1px solid #86efac; }
+.follow_up { color: #92400e; background: #fef3c7; border: 1px solid #fbbf24; }
+.urgent { color: #991b1b; background: #fee2e2; border: 1px solid #fca5a5; }
+.confidence { margin: 18px 0; }
+.confidence-row { display: flex; justify-content: space-between; font-size: 12px; color: #64746b; margin-bottom: 6px; }
+.bar { height: 8px; background: #e5eee9; border-radius: 999px; overflow: hidden; }
+.fill { height: 100%; width: 0; background: #16a34a; border-radius: inherit; transition: width 0.5s ease; }
+.section-title { font-size: 12px; color: #64746b; font-weight: 800; text-transform: uppercase; letter-spacing: 0.07em; margin: 18px 0 10px; }
+.finding { display: flex; gap: 10px; padding: 10px 0; border-bottom: 1px solid #edf3ef; font-size: 14px; }
+.finding:last-child { border-bottom: 0; }
+.mark { color: #dc2626; font-weight: 900; }
+.reference { color: #64746b; font-size: 12px; margin-top: 2px; }
+.disclaimer { margin: 18px 0; padding: 12px; background: #f8faf9; border: 1px solid #d9e7df; border-radius: 8px; color: #52645b; font-size: 12px; line-height: 1.45; }
+button {
+  width: 100%;
+  min-height: 46px;
+  border: 0;
+  border-radius: 8px;
+  background: #15803d;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 800;
+  cursor: pointer;
+}
+button:disabled { opacity: 0.6; cursor: wait; }
+.small { margin-top: 12px; color: #829087; text-align: center; font-size: 11px; }
+.center { text-align: center; }
+.error h1 { color: #b91c1c; }
+</style>
+</head>
+<body>
+<main id="app" class="card center">Loading report preview...</main>
+<script>
+const API_BASE = `${window.location.origin}`;
+const app = document.getElementById('app');
+const token = new URLSearchParams(window.location.search).get('token');
+
+function formatDate(value) {
+  if (!value) return 'Unknown date';
+  const date = typeof value === 'number' ? new Date(value * 1000) : new Date(value);
+  return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString();
+}
+
+function renderError(message) {
+  app.className = 'card center error';
+  app.innerHTML = `<h1>Access denied</h1><p>${message}</p><p class="small">QR codes expire after 30 minutes and the PDF download is single use.</p>`;
+}
+
+async function loadPreview() {
+  if (!token) {
+    renderError('No QR token was found in the URL.');
+    return;
+  }
+
+  try {
+    const response = await fetch(`${API_BASE}/reports/preview?token=${encodeURIComponent(token)}`);
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || data.error?.message || 'Invalid or expired QR code.');
+
+    const urgency = data.urgency_flag || 'routine';
+    const confidence = Math.max(0, Math.min(100, Number(data.confidence || 0)));
+    const findings = (data.key_findings || []).map((finding) => `
+      <div class="finding">
+        <div class="mark">${finding.abnormal ? '▲' : '✓'}</div>
+        <div>
+          <strong>${finding.name || 'Finding'}</strong>: ${finding.value || ''} ${finding.unit || ''}
+          <div class="reference">Reference: ${finding.reference_range || '-'}</div>
+        </div>
+      </div>
+    `).join('') || '<p class="meta">No significant findings extracted.</p>';
+
+    app.className = 'card';
+    app.innerHTML = `
+      <div class="header">
+        <div>
+          <div class="eyebrow">VaidyaAI Report</div>
+          <h1>${data.patient_name || 'Patient'}</h1>
+          <div class="meta">${String(data.report_type || 'Report').toUpperCase()} · ${formatDate(data.report_date)}</div>
+        </div>
+        <span class="badge ${urgency}">${urgency.replace('_', ' ')}</span>
+      </div>
+
+      <div class="confidence">
+        <div class="confidence-row"><span>AI confidence</span><strong>${confidence}%</strong></div>
+        <div class="bar"><div class="fill" style="width:${confidence}%"></div></div>
+      </div>
+
+      <div class="section-title">Key findings</div>
+      ${findings}
+
+      <div class="disclaimer">${data.disclaimer || 'AI-assisted analysis. NOT a medical diagnosis.'}</div>
+      <button id="download">Download full PDF</button>
+      <div class="small">Expires at ${formatDate(data.expires_at)} · PDF download can be used once</div>
+    `;
+
+    document.getElementById('download').addEventListener('click', async (event) => {
+      const button = event.currentTarget;
+      button.disabled = true;
+      button.textContent = 'Preparing PDF...';
+      try {
+        const download = await fetch(`${API_BASE}/reports/download?token=${encodeURIComponent(data.download_token)}`);
+        if (!download.ok) {
+          const err = await download.json().catch(() => ({}));
+          throw new Error(err.detail || err.error?.message || 'Download failed.');
+        }
+        const blob = await download.blob();
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `vaidya_report_${String(data.report_id || 'report').slice(0, 8)}.pdf`;
+        link.click();
+        URL.revokeObjectURL(url);
+        button.textContent = 'Downloaded';
+      } catch (err) {
+        renderError(err.message);
+      }
+    });
+  } catch (err) {
+    renderError(err.message);
+  }
+}
+
+loadPreview();
+</script>
+</body>
+</html>

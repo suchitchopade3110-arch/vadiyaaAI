@@ -4,7 +4,7 @@
 
 const { useState, useEffect, useRef } = React;
 
-const API_BASE = 'http://localhost:8000/api/v1';
+const API_BASE = `${window.location.origin}/api/v1`;
 
 const CLAIM_STEPS = [
   { label: 'NLP Preprocessing',    desc: 'Tokenization, entity extraction' },

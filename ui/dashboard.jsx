@@ -4,7 +4,7 @@
 
 const { useState, useEffect } = React;
 
-const API_BASE = 'http://localhost:8000/api/v1';
+const API_BASE = `${window.location.origin}/api/v1`;
 
 const PIPELINE_ICONS = { claim: '◎', report: '▤', image: '⬡' };
 const PIPELINE_LABELS = { claim: 'Claim', report: 'Report', image: 'Image' };
@@ -72,7 +72,7 @@ function Dashboard({ onNavigate }) {
 
   // Real health check
   useEffect(() => {
-    fetch('http://localhost:8000/health')
+    fetch(`${window.location.origin}/health`)
       .then(res => res.json())
       .then(data => setHealth(data.status === 'ok' ? 'online' : 'offline'))
       .catch(() => setHealth('offline'));

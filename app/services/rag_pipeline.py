@@ -40,6 +40,47 @@ def _image_explanation_fallback(
 ) -> str:
     return "Insufficient evidence. Image explanation service unavailable after retries."
 
+
+def _image_explanation_from_classification(
+    image_type: str,
+    classification: dict,
+    segmentation: dict,
+    sources: list[dict],
+) -> str:
+    label = str(classification.get("label") or classification.get("top_class") or "unknown").replace("_", " ")
+    confidence = classification.get("confidence")
+    if confidence is None:
+        confidence = classification.get("top_confidence", 0.0)
+    try:
+        confidence_pct = float(confidence) * 100 if float(confidence) <= 1 else float(confidence)
+    except Exception:
+        confidence_pct = 0.0
+
+    supporting = []
+    if segmentation:
+        bbox = segmentation.get("bbox")
+        if bbox:
+            supporting.append("segmentation localized a focused region of interest")
+    if sources:
+        supporting.append("retrieved evidence was available for context")
+
+    support_text = "; ".join(supporting) if supporting else "no additional evidence sources were available"
+
+    return (
+        f"WHAT WAS FOUND:\n"
+        f"The image was classified as {label} with about {confidence_pct:.1f}% confidence.\n\n"
+        f"WHAT THIS MEANS:\n"
+        f"This suggests {label.lower()} is the leading model finding on this {image_type} study. "
+        f"The result should be interpreted with the full clinical picture because this is an AI-assisted output, not a diagnosis.\n\n"
+        f"WHAT TO DO NEXT:\n"
+        f"• Review the image with a radiologist or treating clinician.\n"
+        f"• Correlate with symptoms, exam findings, and prior imaging.\n"
+        f"• {('Use the segmentation region as an attention guide.' if segmentation else 'Consider additional imaging or clinical follow-up if symptoms persist.')}\n\n"
+        f"ADDITIONAL CONTEXT:\n"
+        f"{support_text}.\n\n"
+        f"{MEDICAL_DISCLAIMER}"
+    )
+
 DISCHARGE_SYSTEM_PROMPT = """
 You are a medical AI assistant explaining a hospital discharge summary 
 to a patient in simple, plain English.
@@ -94,10 +135,13 @@ class RAGPipeline:
             if not anomalies:
                 return f"No significant anomalies detected in your lab results. Your values appear to be within normal ranges.\n\n{MEDICAL_DISCLAIMER}"
                 
-            anomaly_summary = "\n".join([
-                f"• {a.get('field', 'Test')}: {a.get('value')} {a.get('unit')} (Normal: {a.get('reference')}) — {a.get('severity')}"
-                for a in anomalies
-            ])
+            anomaly_lines = []
+            for a in anomalies:
+                test_display = str(a.get("test") or a.get("field", "Test")).replace("_", " ").replace("\n", " ").strip().title()
+                anomaly_lines.append(
+                    f"• {test_display}: {a.get('value')} {a.get('unit')} (Normal: {a.get('reference')}) — {a.get('severity')}"
+                )
+            anomaly_summary = "\n".join(anomaly_lines)
             
             return (
                 "WHAT WAS FOUND:\n"
@@ -116,7 +160,9 @@ class RAGPipeline:
         return "[Phase 1] LLM explanation not yet connected."
     @with_retry(max_retries=2, backoff_seconds=5.0, fallback=_image_explanation_fallback)
     def explain_image(self, image_type: str, classification: dict, segmentation: dict, sources: list[dict]) -> str:
-        if not sources: return "Insufficient evidence."
-        return "[Phase 1] Image LLM explanation not yet connected."
+        # Keep image explanations useful even when Chroma/RAG is empty.
+        if not sources:
+            return _image_explanation_from_classification(image_type, classification, segmentation, sources)
+        return _image_explanation_from_classification(image_type, classification, segmentation, sources)
 
 rag_pipeline = RAGPipeline()

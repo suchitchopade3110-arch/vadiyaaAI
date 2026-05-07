@@ -3,7 +3,8 @@ VaidyaAI — Clinical PDF Report Generator
 Uses reportlab to produce clinical-grade downloadable reports.
 """
 import io
-from datetime import UTC, datetime
+from datetime import timezone, datetime
+UTC = timezone.utc
 
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER

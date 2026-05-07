@@ -1,4 +1,5 @@
-from datetime import UTC, datetime
+from datetime import timezone, datetime
+UTC = timezone.utc
 
 from fastapi.responses import JSONResponse
 

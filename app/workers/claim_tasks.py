@@ -1,10 +1,11 @@
 """
 VaidyaAI — Claim Verification Celery Tasks
-Pipeline: ClinicalBERT NER → BioGPT → ChromaDB → GPT-4/Llama → Hallucination Check
+Pipeline: Groq/Clinical NER → BioGPT → ChromaDB → GPT-4/Llama → Hallucination Check
 """
 
 import time
-from datetime import UTC, datetime
+from datetime import timezone, datetime
+UTC = timezone.utc
 from celery import Task
 from app.workers.celery_app import celery_app
 from app.core.disclaimer import MEDICAL_DISCLAIMER
@@ -36,7 +37,7 @@ def verify_claim(self, claim_id: str, claim_text: str, patient_id: str = None):
     """
     Full claim verification pipeline.
     Steps:
-    1. ClinicalBERT NER
+    1. Clinical NER (Groq when GROQ_API_KEY is set; fallback otherwise)
     2. BioGPT encode → ChromaDB search
     3. GPT-4/Llama reasoning
     4. Hallucination check (Phase 2: 3-layer)
@@ -45,7 +46,7 @@ def verify_claim(self, claim_id: str, claim_text: str, patient_id: str = None):
     start_time = time.time()
 
     try:
-        # ── Step 1: ClinicalBERT NER ──────────────────────────────────────
+        # ── Step 1: Clinical NER ──────────────────────────────────────────
         self.update_state(state="PROGRESS", meta={"step": "ner", "pct": 10})
         ner_result = run_ner(claim_text)
         feature_dict = {lv.name: {"value": lv.value, "unit": lv.unit} for lv in ner_result.lab_values}
@@ -54,7 +55,7 @@ def verify_claim(self, claim_id: str, claim_text: str, patient_id: str = None):
             "medications": ner_result.medications,
             "lab_values": feature_dict,
             "procedures": [],
-            "_source": "clinicalbert-ner"
+            "_source": "groq-llama3-ner" if settings.GROQ_API_KEY else "clinicalbert-or-regex-ner",
         }
 
         # ── Step 2: BioGPT → ChromaDB ─────────────────────────────────────
@@ -77,6 +78,7 @@ def verify_claim(self, claim_id: str, claim_text: str, patient_id: str = None):
                 "hallucination_detected": False,
                 "hallucination_details": {},
                 "shap_values":           {},
+                "ner_engine":            entities["_source"],
                 "medical_disclaimer":    MEDICAL_DISCLAIMER,
                 "processing_time_ms":    round((time.time() - start_time) * 1000, 2),
                 "completed_at":          datetime.now(UTC).isoformat(),
@@ -119,6 +121,7 @@ def verify_claim(self, claim_id: str, claim_text: str, patient_id: str = None):
             "hallucination_detected": hallucination_detected,
             "hallucination_details": hallucination_details,
             "shap_values":           {},
+            "ner_engine":            entities["_source"],
             "medical_disclaimer":    MEDICAL_DISCLAIMER,
             "processing_time_ms":    round(elapsed_ms, 2),
             "completed_at":          datetime.now(UTC).isoformat(),

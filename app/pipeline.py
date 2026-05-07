@@ -38,13 +38,14 @@ except Exception:  # pragma: no cover - only used in minimal self-test envs
             return default_factory()
         return default
 
+from app.image_pipeline.classifier_v2 import classify_image
 from app.ml.ml_prediction_engine import (
-    classify_image,
     ensemble_predict,
     generate_gradcam_overlay,
     predict_tabular,
     to_json_safe,
 )
+from clinical_reference import analyze_blood_report, enrich_lab_with_who_ranges, clean_test_name
 
 logger = logging.getLogger("vaidya.pipeline")
 
@@ -77,7 +78,11 @@ class PipelineResponse(BaseModel):
     error: Optional[str] = None
 
     tabular_prediction: Optional[Dict[str, Any]] = None
+    ensemble_details: Optional[Dict[str, Any]] = None
     image_classification: Optional[Dict[str, Any]] = None
+    label_metadata: Optional[Dict[str, Any]] = None
+    radiology_evidence: List[Dict[str, Any]] = Field(default_factory=list)
+    who_structured_report: Optional[Dict[str, Any]] = None
     ensemble: Optional[Dict[str, Any]] = None
 
     segmentation: Optional[Dict[str, Any]] = None
@@ -87,6 +92,13 @@ class PipelineResponse(BaseModel):
     anomalies: List[Dict[str, Any]] = Field(default_factory=list)
 
     verdict: Optional[str] = None
+    risk_score: Optional[float] = None
+    risk_label: Optional[str] = None
+    differential_diagnosis: Optional[Dict[str, Any]] = None
+    explanation_mode: str = "brief"
+    explanation_brief: Optional[str] = None
+    explanation_full: Optional[str] = None
+    rag_explanation: Optional[str] = None
     confidence_score: Optional[float] = None
     confidence_label: Optional[str] = None
     explanation: Optional[str] = None
@@ -98,6 +110,13 @@ class PipelineResponse(BaseModel):
     shap_top_factors: List[Dict[str, Any]] = Field(default_factory=list)
     gradcam_path: Optional[str] = None
     segmentation_overlay_path: Optional[str] = None
+    patient_history: List[Dict[str, Any]] = Field(default_factory=list)
+    history_comparison: Optional[Dict[str, Any]] = None
+    ocr_engine: Optional[str] = None
+    ocr_confidence: Optional[float] = None
+    ner_engine: Optional[str] = None
+    qr_token: Optional[str] = None
+    qr_available: bool = False
 
     disclaimer: str = DISCLAIMER
 
@@ -175,6 +194,19 @@ def _confidence_label(score: float) -> str:
     return "LOW"
 
 
+def _normalize_lab_key(name: Any) -> str:
+    return str(name or "").lower().strip()
+
+
+def _fallback_risk_from_anomalies(anomalies: List[Dict[str, Any]]) -> float:
+    if not anomalies:
+        return 0.0
+    critical = sum(1 for item in anomalies if str(item.get("severity", "")).upper() == "CRITICAL")
+    high = sum(1 for item in anomalies if str(item.get("severity", "")).upper() == "HIGH")
+    score = min(95.0, 15.0 + (critical * 25.0) + (high * 15.0))
+    return round(score, 1)
+
+
 # ============================================================================
 # LAZY LAYER WRAPPERS
 # ============================================================================
@@ -225,12 +257,15 @@ def _preprocess_dicom_safe(image_path: str):
 
 def _extract_lab_values_safe(raw_text: str, ner_result: Any, report_type: str) -> List[Any]:
     values = list(getattr(ner_result, "lab_values", []) or [])
-    if values or report_type != "lab":
+    if report_type != "lab":
         return values
     try:
-        from app.services.preprocessor import UniversalValueExtractor
+        from app.services.preprocessor import extract_all_lab_values, deduplicate_lab_values
 
-        return UniversalValueExtractor().extract_all(raw_text)
+        layered = extract_all_lab_values(raw_text)
+        if values:
+            return deduplicate_lab_values(values + layered)
+        return layered
     except Exception as exc:
         logger.warning("Structured lab extraction fallback: %s", exc)
         return values
@@ -349,34 +384,189 @@ def _ner_entities_dict(ner_result: Any) -> Dict[str, Any]:
     }
 
 
-def _lab_value_to_row(lab_value: Any) -> Dict[str, Any]:
+def _lab_value_to_row(lab_value: Any, gender: str = "male", age: int = 40) -> Dict[str, Any]:
     name = getattr(lab_value, "name", None)
     value = getattr(lab_value, "value", None)
     unit = getattr(lab_value, "unit", "")
+    ref_low = getattr(lab_value, "ref_low", None)
+    ref_high = getattr(lab_value, "ref_high", None)
+    reference = getattr(lab_value, "reference", None)
     if isinstance(lab_value, dict):
         name = lab_value.get("name") or lab_value.get("test")
         value = lab_value.get("value") if lab_value.get("value") is not None else lab_value.get("result")
         unit = lab_value.get("unit", "")
+        ref_low = lab_value.get("ref_low")
+        ref_high = lab_value.get("ref_high")
+        reference = lab_value.get("reference") or lab_value.get("reference_range")
+
+    if name:
+        name = clean_test_name(str(name))
+
+    if ref_low is not None and ref_high is not None:
+        reference = f"{ref_low} - {ref_high}"
+    elif not reference and name:
+        try:
+            from app.services.preprocessor import resolve_reference
+
+            low, high, _ = resolve_reference(str(name), gender=gender, age=age, pdf_ref_low=ref_low, pdf_ref_high=ref_high)
+            if low is not None and high is not None:
+                reference = f"{low} - {high}"
+        except Exception:
+            reference = None
+
     return {
+        "field": name,
         "test": name,
         "result": value,
         "unit": unit,
-        "reference": "--",
+        "reference": reference or "--",
         "flag": "NORMAL",
+        "ref_low": ref_low,
+        "ref_high": ref_high,
     }
 
 
 def _lab_values_to_dict(lab_values: List[Any], gender: str, age: int) -> Dict[str, Any]:
     lab_dict = {}
     for lab_value in lab_values:
-        row = _lab_value_to_row(lab_value)
+        row = _lab_value_to_row(lab_value, gender=gender, age=age)
         if row["test"] is None or row["result"] is None:
             continue
-        key = str(row["test"]).lower().replace(" ", "_")
+        key = _normalize_lab_key(row["test"]).replace(" ", "_")
         lab_dict[key] = row["result"]
     lab_dict["gender"] = 1 if gender.lower() == "male" else 0
     lab_dict["age"] = age
     return lab_dict
+
+
+def _engine_anomalies_to_rows(anomalies: Dict[str, Any]) -> List[Dict[str, Any]]:
+    rows: List[Dict[str, Any]] = []
+    for key, item in (anomalies or {}).items():
+        if not isinstance(item, dict) or item.get("status") != "ABNORMAL":
+            continue
+        rows.append(
+            {
+                "field": item.get("field") or key,
+                "test": item.get("field") or key,
+                "value": item.get("value"),
+                "unit": item.get("unit", ""),
+                "reference": item.get("reference", "--"),
+                "direction": item.get("direction", "ABNORMAL"),
+                "severity": item.get("severity", "HIGH"),
+                "flag": item.get("flag", "⚠️ ABNORMAL"),
+                "clinical_meaning": item.get("clinical_meaning", ""),
+            }
+        )
+    return rows
+
+
+def _deduplicate_anomalies(anomalies: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    seen: Dict[str, Dict[str, Any]] = {}
+    for item in anomalies or []:
+        if not isinstance(item, dict):
+            continue
+        key = _normalize_lab_key(item.get("field") or item.get("test") or item.get("label"))
+        if not key:
+            continue
+        existing = seen.get(key)
+        if existing is None or len(str(item.get("clinical_meaning") or item.get("explanation") or "")) > len(
+            str(existing.get("clinical_meaning") or existing.get("explanation") or "")
+        ):
+            seen[key] = item
+    return list(seen.values())
+
+
+def _urine_entities_to_rows(entities: Dict[str, Any]) -> List[Dict[str, Any]]:
+    rows = []
+    dipstick = entities.get("dipstick") or {}
+    microscopy = entities.get("microscopy") or {}
+    quantitative = entities.get("quantitative") or {}
+
+    for section_name, section in [
+        ("dipstick", dipstick),
+        ("microscopy", microscopy),
+        ("quantitative", quantitative),
+    ]:
+        if not isinstance(section, dict):
+            continue
+        for key, value in section.items():
+            if key == "casts" and isinstance(value, dict):
+                for cast_name, cast_value in value.items():
+                    rows.append(
+                        {
+                            "field": cast_name.replace("_", " ").title(),
+                            "test": cast_name,
+                            "result": cast_value,
+                            "value": cast_value,
+                            "unit": "",
+                            "reference": "absent",
+                            "flag": "ABNORMAL" if str(cast_value).lower() == "present" else "NORMAL",
+                            "section": section_name,
+                        }
+                    )
+                continue
+            if not isinstance(value, dict):
+                continue
+            rows.append(
+                {
+                    "field": key.replace("_", " ").title(),
+                    "test": key,
+                    "result": value.get("value", ""),
+                    "value": value.get("value", ""),
+                    "unit": value.get("unit", ""),
+                    "reference": value.get("reference", "--"),
+                    "flag": str(value.get("flag", "normal")).upper(),
+                    "section": section_name,
+                }
+            )
+    return rows
+
+
+def _urine_pattern_anomalies(patterns: List[str], evidence: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    evidence_by_pattern = {item.get("pattern"): item for item in evidence or []}
+    urgency_to_severity = {
+        "critical": "CRITICAL",
+        "high": "HIGH",
+        "medium": "MODERATE",
+        "low": "LOW",
+        "none": "NORMAL",
+    }
+    rows = []
+    for pattern in patterns or []:
+        matched = next(
+            (item for item in evidence_by_pattern.values() if pattern.lower().replace("_", " ") in str(item.get("pattern", "")).lower()),
+            {},
+        )
+        severity = urgency_to_severity.get(str(matched.get("urgency", "medium")).lower(), "MODERATE")
+        rows.append(
+            {
+                "field": pattern.replace("_", " "),
+                "test": pattern,
+                "value": "detected",
+                "unit": "",
+                "reference": "not detected",
+                "direction": "ABNORMAL",
+                "severity": severity,
+                "flag": f"⚠️ {severity}",
+                "clinical_meaning": matched.get("text", ""),
+                "status": "ABNORMAL",
+            }
+        )
+    return rows
+
+
+def _urine_risk_from_patterns(patterns: List[str]) -> float:
+    score_map = {
+        "DKA": 95.0,
+        "Pre_eclampsia": 95.0,
+        "Nephritic": 75.0,
+        "Nephrotic": 75.0,
+        "UTI": 65.0,
+        "Renal_TB_suspected": 75.0,
+        "Obstructive_jaundice": 70.0,
+        "Hemolytic": 55.0,
+    }
+    return max([score_map.get(pattern, 35.0) for pattern in patterns] or [20.0])
 
 
 # ============================================================================
@@ -458,19 +648,41 @@ def run_image_pipeline(
             except Exception as exc:
                 logger.warning("[%s] Image RAG fallback: %s", ctx.job_id, exc)
 
+        who_outputs = {}
+        try:
+            from app.services.image_analysis_service import build_who_image_outputs
+
+            who_outputs = build_who_image_outputs(
+                label=classification.label,
+                confidence=classification.confidence,
+                segmentation=segmentation or {},
+                patient_id=ctx.patient_id,
+            )
+            structured = who_outputs.get("structured_explanation") or {}
+            explanation = structured.get("clinical_interpretation") or explanation
+            uncertainty_flag = uncertainty_flag or bool(structured.get("uncertainty_flag"))
+        except Exception as exc:
+            logger.warning("[%s] WHO image enrichment fallback: %s", ctx.job_id, exc)
+
+        evidence_sources = who_outputs.get("radiology_evidence") or []
         return PipelineResponse(
             job_id=ctx.job_id,
             patient_id=ctx.patient_id,
             pipeline_type="image",
             status="completed",
             image_classification=to_json_safe(classification),
+            label_metadata=who_outputs.get("label_metadata"),
+            radiology_evidence=evidence_sources,
+            who_structured_report=who_outputs.get("who_structured_report"),
             segmentation=segmentation,
-            verdict="Uncertain",
+            verdict=(who_outputs.get("structured_explanation") or {}).get("verdict", "Uncertain"),
+            risk_score=round(classification.confidence * 100, 2),
+            risk_label=_confidence_label(classification.confidence * 100),
             confidence_score=round(classification.confidence * 100, 2),
             confidence_label=_confidence_label(classification.confidence * 100),
             explanation=explanation,
-            plain_language_summary=explanation,
-            sources=sources,
+            plain_language_summary=(who_outputs.get("structured_explanation") or {}).get("patient_friendly_summary", explanation),
+            sources=evidence_sources or sources,
             uncertainty_flag=uncertainty_flag,
             gradcam_path=gradcam_path,
             processing_time_ms=ctx.elapsed_ms,
@@ -492,6 +704,7 @@ def run_report_pipeline(
     job_id: Optional[str] = None,
     gender: str = "male",
     age: int = 40,
+    explanation_mode: str = "brief",
 ) -> PipelineResponse:
     """PDF/CSV report -> OCR -> NER -> optional XGBoost/SHAP -> optional RAG."""
     ctx = _make_context("report", patient_id, job_id)
@@ -504,35 +717,191 @@ def run_report_pipeline(
 
         ocr_result = _run_ocr_safe(file_path)
         raw_text = getattr(ocr_result, "raw_text", "") or ""
-        ner_result = _run_ner_safe(raw_text)
+        urine_result = None
+        try:
+            from app.services.clinical_ner_service import detect_report_type, run_clinical_pipeline
+
+            if detect_report_type(raw_text) == "urinalysis":
+                urine_result = run_clinical_pipeline(raw_text)
+        except Exception as exc:
+            logger.warning("[%s] Urinalysis NER enrichment skipped: %s", ctx.job_id, exc)
+        ner_result = _NerResult(conditions=[], medications=[], dates=[], lab_values=[]) if urine_result else _run_ner_safe(raw_text)
+
         lab_values = _extract_lab_values_safe(raw_text, ner_result, report_type)
+        if report_type == "lab":
+            lab_values = enrich_lab_with_who_ranges(lab_values, gender=gender)
         lab_rows = [_lab_value_to_row(value) for value in lab_values]
         lab_dict = _lab_values_to_dict(lab_values, gender=gender, age=age)
+        clinical_analysis = analyze_blood_report(lab_dict, gender=gender, age=age) if report_type == "lab" else None
 
         entities = _ner_entities_dict(ner_result)
+        if clinical_analysis is not None:
+            entities["conditions"] = clinical_analysis["active_conditions"]
         tabular_prediction = None
         anomalies = []
         risk_score = 50.0
         risk_factors = []
+        if urine_result:
+            entities = urine_result.get("entities") or {}
+            entities["_source"] = urine_result.get("model_used")
+            lab_rows = _urine_entities_to_rows(entities)
+            lab_dict = urine_result.get("features") or {}
+            anomalies = _urine_pattern_anomalies(
+                entities.get("detected_patterns") or [],
+                urine_result.get("rag_evidence") or [],
+            )
+            risk_score = _urine_risk_from_patterns(entities.get("detected_patterns") or [])
+            risk_factors = [
+                {"feature": pattern, "shap": 0.0}
+                for pattern in (entities.get("detected_patterns") or [])
+            ]
+            tabular_prediction = {
+                "report_type": "urinalysis",
+                "features": urine_result.get("features") or {},
+                "rag_evidence": urine_result.get("rag_evidence") or [],
+                "model_used": urine_result.get("model_used"),
+            }
 
-        if report_type == "lab" and lab_values:
+        if report_type == "lab" and lab_values and not urine_result:
             try:
                 tabular = predict_tabular(lab_dict, raw_text)
                 tabular_prediction = to_json_safe(tabular)
-                risk_score = float(tabular_prediction.get("risk_score", 0.5)) * 100
                 risk_factors = tabular_prediction.get("top_contributors", [])
-                for test_name, status in tabular_prediction.get("anomalies", {}).items():
-                    if status == "ABNORMAL":
+                if clinical_analysis is not None:
+                    row_lookup = {
+                        _normalize_lab_key(row.get("field") or row.get("test")): row
+                        for row in lab_rows
+                    }
+                    anomalies = []
+                    for key, item in clinical_analysis["anomalies"].items():
+                        if not isinstance(item, dict) or item.get("status") != "ABNORMAL":
+                            continue
+                        row = row_lookup.get(_normalize_lab_key(key), {})
                         anomalies.append(
                             {
-                                "test": test_name,
-                                "value": lab_dict.get(test_name),
+                                "field": clean_test_name(item.get("field") or key),
+                                "test": clean_test_name(key),
+                                "value": item.get("value", row.get("result")),
+                                "unit": item.get("unit", row.get("unit", "")),
+                                "reference": item.get("reference", row.get("reference", "--")),
+                                "direction": item.get("direction", "ABNORMAL"),
+                                "severity": item.get("severity", "HIGH"),
+                                "flag": item.get("flag", "⚠️ ABNORMAL"),
+                                "clinical_meaning": item.get("clinical_meaning", ""),
                                 "status": "ABNORMAL",
-                                "severity": "HIGH",
+                            }
+                        )
+                    risk_map = {"normal": 0.0, "moderate": 30.0, "high": 70.0, "critical": 95.0}
+                    risk_score = risk_map.get(str(clinical_analysis["risk_level"]).lower(), 30.0 if anomalies else 0.0)
+                    risk_factors = clinical_analysis["conditions"] or risk_factors
+                    for row in lab_rows:
+                        key = _normalize_lab_key(row.get("field") or row.get("test"))
+                        item = clinical_analysis["anomalies"].get(key)
+                        if isinstance(item, dict):
+                            row["reference"] = item.get("reference", row.get("reference", "--"))
+                            row["flag"] = item.get("flag", row.get("flag", "NORMAL"))
+                            row["clinical_meaning"] = item.get("clinical_meaning", "")
+                else:
+                    risk_score = float(tabular_prediction.get("risk_score", 0.5)) * 100
+                    anomaly_map = tabular_prediction.get("anomalies", {}) or {}
+                    row_lookup = {
+                        _normalize_lab_key(row.get("field") or row.get("test")): row
+                        for row in lab_rows
+                    }
+                    for test_name, details in anomaly_map.items():
+                        if not isinstance(details, dict) or details.get("status") != "ABNORMAL":
+                            continue
+                        row = row_lookup.get(_normalize_lab_key(test_name), {})
+                        anomalies.append(
+                            {
+                                "field": clean_test_name(row.get("field") or details.get("field") or test_name),
+                                "test": clean_test_name(test_name),
+                                "value": row.get("result", details.get("value", lab_dict.get(test_name))),
+                                "unit": row.get("unit", details.get("unit", "")),
+                                "reference": row.get("reference", details.get("reference", "--")),
+                                "direction": details.get("direction", "ABNORMAL"),
+                                "severity": details.get("severity", "HIGH"),
+                                "flag": details.get("flag", "⚠️ ABNORMAL"),
+                                "clinical_meaning": details.get("clinical_meaning", ""),
+                                "status": "ABNORMAL",
                             }
                         )
             except Exception as exc:
                 logger.warning("[%s] XGBoost skipped/failed: %s", ctx.job_id, exc)
+
+        if report_type == "lab" and anomalies and risk_score <= 0.05:
+            risk_score = max(_fallback_risk_from_anomalies(anomalies), 30.0)
+            if risk_score <= 0.05:
+                critical = sum(1 for a in anomalies if str(a.get("severity", "")).upper() == "CRITICAL")
+                high = sum(1 for a in anomalies if str(a.get("severity", "")).upper() == "HIGH")
+                risk_score = min(95.0, 15.0 + (critical * 25.0) + (high * 15.0))
+
+        ensemble_details = None
+        if urine_result:
+            risk_label = _confidence_label(risk_score)
+            ensemble_details = {
+                "ensemble_risk_score": risk_score,
+                "risk_label": risk_label,
+                "model_scores": {"urinalysis_rules": risk_score},
+                "model_weights": {"urinalysis_rules": 1.0},
+                "model_agreement": "rules",
+                "agreement_std_dev": 0.0,
+                "shap_values": {},
+                "top_factors": risk_factors,
+                "anomalies": anomalies,
+                "uncertainty_flag": not bool(anomalies),
+                "confidence": risk_score,
+                "models_used": ["urinalysis_rules", "urinalysis_rag"],
+            }
+        else:
+            try:
+                from app.services.ensemble_predictor import ensemble_predict
+
+                ensemble_details = ensemble_predict(
+                    ml_features=lab_dict,
+                    lab_values=lab_rows,
+                    clinical_risk_level=clinical_analysis.get("risk_level") if clinical_analysis else None,
+                )
+                risk_score = float(ensemble_details.get("ensemble_risk_score", risk_score))
+                risk_label = ensemble_details.get("risk_label")
+                ensemble_anomalies = ensemble_details.get("anomalies") or []
+                if ensemble_anomalies:
+                    anomalies = _deduplicate_anomalies(anomalies + ensemble_anomalies)
+                if ensemble_details.get("top_factors"):
+                    risk_factors = ensemble_details["top_factors"]
+            except Exception as exc:
+                logger.warning("[%s] Ensemble predictor skipped: %s", ctx.job_id, exc)
+                risk_label = _confidence_label(risk_score)
+
+        try:
+            from app.services.differential_diagnosis import generate_differential, generate_explanation
+
+            differential_diagnosis = generate_differential(
+                entities=entities,
+                anomalies=anomalies,
+                risk_score=risk_score,
+                report_type=report_type,
+            )
+            explanation_mode = "full" if str(explanation_mode).lower() == "full" else "brief"
+            generated_explanation = generate_explanation(
+                entities=entities,
+                anomalies=anomalies,
+                risk_score=risk_score,
+                risk_label=risk_label,
+                mode=explanation_mode,
+            )
+            explanation_brief = (
+                generated_explanation
+                if explanation_mode == "brief"
+                else generate_explanation(entities, anomalies, risk_score, risk_label, mode="brief")
+            )
+            explanation_full = generated_explanation if explanation_mode == "full" else None
+        except Exception as exc:
+            logger.warning("[%s] Differential diagnosis skipped: %s", ctx.job_id, exc)
+            differential_diagnosis = None
+            explanation_mode = "brief"
+            explanation_brief = None
+            explanation_full = None
 
         rag_result = _explain_report_safe(
             raw_text=raw_text,
@@ -543,10 +912,28 @@ def run_report_pipeline(
             report_type=report_type,
         )
 
+        patient_history: List[Dict[str, Any]] = []
+        history_comparison = None
+        if patient_id:
+            try:
+                from app.services.patient_history_service import compare_with_latest_history, get_patient_history_sync
+
+                patient_history = get_patient_history_sync(patient_id, limit=5)
+                current_for_compare = {
+                    "report_id": ctx.job_id,
+                    "risk_score": risk_score,
+                    "lab_values": lab_rows,
+                    "extracted_entities": entities,
+                    "completed_at": datetime.now(timezone.utc).isoformat(),
+                }
+                history_comparison = compare_with_latest_history(current_for_compare, patient_history)
+            except Exception as exc:
+                logger.warning("[%s] Patient history comparison skipped: %s", ctx.job_id, exc)
+
         confidence_label = (
             tabular_prediction.get("confidence", "MEDIUM")
             if tabular_prediction
-            else _confidence_label(float(rag_result.get("confidence_score", 50.0)))
+            else risk_label or _confidence_label(float(rag_result.get("confidence_score", 50.0)))
         )
 
         return PipelineResponse(
@@ -555,18 +942,31 @@ def run_report_pipeline(
             pipeline_type="report",
             status="completed",
             tabular_prediction=tabular_prediction,
+            ensemble_details=ensemble_details,
             extracted_entities=entities,
             lab_values=lab_rows,
             anomalies=anomalies,
             verdict=rag_result["verdict"],
+            risk_score=risk_score,
+            risk_label=risk_label or confidence_label,
+            differential_diagnosis=differential_diagnosis,
+            explanation_mode=explanation_mode,
+            explanation_brief=explanation_brief,
+            explanation_full=explanation_full,
+            rag_explanation=rag_result["explanation"],
             confidence_score=rag_result["confidence_score"],
             confidence_label=confidence_label,
-            explanation=rag_result["explanation"],
-            plain_language_summary=rag_result["plain_language_summary"],
+            explanation=explanation_brief or rag_result["explanation"],
+            plain_language_summary=explanation_brief or rag_result["plain_language_summary"],
             sources=rag_result["sources"],
-            uncertainty_flag=rag_result["uncertainty_flag"],
+            uncertainty_flag=rag_result["uncertainty_flag"] or bool((ensemble_details or {}).get("uncertainty_flag")),
             hallucination_flagged=rag_result["hallucination_flagged"],
             shap_top_factors=risk_factors,
+            patient_history=patient_history[:3],
+            history_comparison=history_comparison,
+            ocr_engine="paddle",
+            ocr_confidence=getattr(ocr_result, "confidence", None),
+            ner_engine="groq-llama3-ner" if os.getenv("GROQ_API_KEY") else "clinicalbert-or-regex-ner",
             processing_time_ms=ctx.elapsed_ms,
             completed_at=datetime.now(timezone.utc).isoformat(),
         )
@@ -606,6 +1006,8 @@ def run_claim_pipeline(
             status="completed",
             extracted_entities=entities,
             verdict=verdict["verdict"],
+            risk_score=verdict["confidence_score"],
+            risk_label=_confidence_label(float(verdict["confidence_score"])),
             confidence_score=verdict["confidence_score"],
             confidence_label=_confidence_label(float(verdict["confidence_score"])),
             explanation=verdict["explanation"],

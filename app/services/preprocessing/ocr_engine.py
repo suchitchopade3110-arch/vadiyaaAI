@@ -7,10 +7,21 @@ def perform_ocr_on_pil_image(image: Image.Image):
     """Run OCR on an in-memory PIL image."""
     import numpy as np
 
-    from app.services.preprocessor import OcrOutput, _tesseract_on_array
+    from app.services.preprocessor import OcrOutput
 
     arr = np.array(image.convert("RGB"))
-    text, confidence = _tesseract_on_array(arr)
+    try:
+        import cv2
+        from app.services.ocr_service import ocr_image, preprocess_image
+
+        bgr = cv2.cvtColor(arr, cv2.COLOR_RGB2BGR)
+        lines = ocr_image(preprocess_image(bgr))
+        text = " ".join(line["text"] for line in lines)
+        confidence = round(sum(line["confidence"] for line in lines) / len(lines), 3) if lines else 0.0
+    except Exception:
+        from app.services.preprocessor import _tesseract_on_array
+
+        text, confidence = _tesseract_on_array(arr)
     return OcrOutput(raw_text=text, confidence=confidence, pages=[text])
 
 

@@ -22,7 +22,8 @@ import logging
 import os
 import re
 import time
-from datetime import UTC, datetime
+from datetime import timezone, datetime
+UTC = timezone.utc
 from typing import Any, Literal
 
 try:

@@ -35,6 +35,7 @@ def analyze_report_task(
     report_type: str,
     gender: str = "male",
     age: int = 40,
+    explanation_mode: str = "brief",
 ):
     """Run report pipeline asynchronously."""
     job_id = self.request.id
@@ -49,6 +50,7 @@ def analyze_report_task(
             job_id=job_id,
             gender=gender,
             age=age,
+            explanation_mode=explanation_mode,
         )
         return to_json_safe(result.model_dump())
     except Exception as exc:
@@ -110,4 +112,3 @@ def verify_claim_task(self, claim_text: str, patient_id: Optional[str]):
     except Exception as exc:
         logger.error("[%s] Claim task failed: %s", job_id, exc)
         raise self.retry(exc=exc, countdown=_retry_delay(self.request.retries))
-

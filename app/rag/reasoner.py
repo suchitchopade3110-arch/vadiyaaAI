@@ -23,7 +23,8 @@ import logging
 import os
 import re
 import time
-from datetime import UTC, datetime
+from datetime import timezone, datetime
+UTC = timezone.utc
 from functools import lru_cache
 
 from groq import Groq

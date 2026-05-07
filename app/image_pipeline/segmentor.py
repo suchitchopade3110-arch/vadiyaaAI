@@ -19,6 +19,7 @@ import json
 import time
 import zipfile
 import traceback
+from pathlib import Path
 from dataclasses import dataclass, field, asdict
 from typing import Optional, List, Dict, Any
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -54,8 +55,10 @@ def load_model(checkpoint_path: str, model_type: str = "vit_b") -> SamPredictor:
     return predictor
 
 # --- Try MedSAM first, fall back to standard SAM ---
-MEDSAM_CKPT  = os.getenv("MEDSAM_CKPT_PATH", "/models/medsam_vit_b.pth")
-SAM_CKPT     = os.getenv("SAM_CKPT_PATH", "/models/sam_vit_b_01ec64.pth")
+_APP_ROOT = Path(__file__).resolve().parents[1]
+_DEFAULT_MODEL_DIR = _APP_ROOT / "ml" / "models"
+MEDSAM_CKPT  = os.getenv("MEDSAM_CKPT_PATH", str(_DEFAULT_MODEL_DIR / "medsam_vit_b.pth"))
+SAM_CKPT     = os.getenv("SAM_CKPT_PATH", str(_DEFAULT_MODEL_DIR / "sam_vit_b_01ec64.pth"))
 
 MODEL_NAME = "SAM-ViT-B"
 

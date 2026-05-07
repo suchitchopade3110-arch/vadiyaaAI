@@ -8,7 +8,8 @@ import time
 import uuid
 import json
 import logging
-from datetime import datetime, UTC
+from datetime import datetime, timezone
+UTC = timezone.utc
 from starlette.types import ASGIApp, Scope, Receive, Send
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request

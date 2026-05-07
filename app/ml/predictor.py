@@ -34,13 +34,8 @@ _PKL = {
     "explainer": os.path.join(_MODELS_DIR, "shap_explainer.pkl"),
 }
 
-# Feature order — must match scaler.pkl fit order exactly
-FEATURE_ORDER = [
-    "age",
-    "glucose", "hemoglobin", "cholesterol",
-    "bp_systolic", "bp_diastolic", "pulse_pressure",
-    "tsh", "vitamin_d", "creatinine", "ldl", "hdl", "crp",
-]
+# FEATURE_ORDER will be determined dynamically from the model
+FEATURE_ORDER = []
 
 DISCLAIMER = "AI-assisted analysis. NOT a medical diagnosis."
 
@@ -70,6 +65,17 @@ def _load_models():
         _scaler    = joblib.load(_PKL["scaler"])
         _explainer = joblib.load(_PKL["explainer"])
         log.info(f"ML models loaded: {type(_model).__name__}, {type(_scaler).__name__}")
+        
+        # Issue 2 Fix: Extract features exactly as model expects them
+        global FEATURE_ORDER
+        try:
+            FEATURE_ORDER = list(_model.feature_names_in_)
+        except AttributeError:
+            try:
+                FEATURE_ORDER = list(_model.calibrated_classifiers_[0].estimator.feature_names_in_)
+            except AttributeError:
+                FEATURE_ORDER = ["age", "gender", "glucose", "hemoglobin", "cholesterol", "bp_systolic", "bp_diastolic", "pulse_pressure", "tsh", "vitamin_d", "creatinine", "ldl", "hdl", "crp"]
+                
     return _model, _scaler, _explainer
 
 
@@ -108,8 +114,10 @@ def predict_safe(feature_dict: dict) -> dict:
         if match:
             normalized_features[k.lower()] = float(match.group())
 
+    num_cols = [f for f in FEATURE_ORDER if f != "gender" and f != "gender_encoded"]
+    
     feature_vector = []
-    for f in FEATURE_ORDER:
+    for f in num_cols:
         val = normalized_features.get(f, 0.0)
         # Fix 3: Glucose feature encoding -> deviation from normal
         if f == "glucose":
@@ -118,12 +126,20 @@ def predict_safe(feature_dict: dict) -> dict:
         
     X_raw = np.array(feature_vector).reshape(1, -1)
 
-    # ── Scale 13 features (scaler fitted without gender_encoded) ─────────────
-    X_scaled_13 = scaler.transform(X_raw)
+    # ── Scale features (scaler fitted without gender) ─────────────
+    X_scaled_num = scaler.transform(X_raw)
 
-    # ── Re-insert gender_encoded at position 1 for XGBoost (14 features) ─────
-    gender_val = np.array([[normalized_features.get("gender_encoded", 1.0)]])
-    X_scaled = np.hstack([X_scaled_13[:, :1], gender_val, X_scaled_13[:, 1:]])
+    # ── Re-insert gender and other categorical features in exact FEATURE_ORDER ─────
+    final_scaled_vector = []
+    num_idx = 0
+    for f in FEATURE_ORDER:
+        if f == "gender" or f == "gender_encoded":
+            final_scaled_vector.append(normalized_features.get("gender_encoded", 1.0))
+        else:
+            final_scaled_vector.append(X_scaled_num[0, num_idx])
+            num_idx += 1
+            
+    X_scaled = np.array(final_scaled_vector).reshape(1, -1)
 
     # ── Predict ───────────────────────────────────────────────────────────────
     try:
@@ -137,9 +153,7 @@ def predict_safe(feature_dict: dict) -> dict:
         raw_booster = xgb_classifier.get_booster()
         
         # Booster was trained with explicit feature names
-        xgb_features = ["age", "gender", "glucose", "hemoglobin", "cholesterol", 
-                        "bp_systolic", "bp_diastolic", "pulse_pressure", "tsh", 
-                        "vitamin_d", "creatinine", "ldl", "hdl", "crp"]
+        xgb_features = FEATURE_ORDER
         dmatrix = xgb.DMatrix(X_scaled, feature_names=xgb_features)
         
         # Raw booster returns 1D array of P(y=1)
@@ -166,7 +180,14 @@ def predict_safe(feature_dict: dict) -> dict:
         else:
             sv = shap_vals[0]
 
-        shap_dict = {f: round(float(sv[i]), 4) for i, f in enumerate(FEATURE_ORDER)}
+        actual_feature_count = X_scaled.shape[1]
+        if len(FEATURE_ORDER) == actual_feature_count:
+            feat_names = list(FEATURE_ORDER)
+        else:
+            feat_names = list(FEATURE_ORDER[:actual_feature_count])
+            while len(feat_names) < actual_feature_count:
+                feat_names.append(f"feature_{len(feat_names)}")
+        shap_dict = {f: round(float(sv[i]), 4) for i, f in enumerate(feat_names)}
 
         # top 5 by absolute shap value
         top_factors = sorted(

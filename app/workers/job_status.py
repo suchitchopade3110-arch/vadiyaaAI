@@ -4,12 +4,12 @@ Routes can use this to return live task state from Redis backend
 without hitting the DB for every poll.
 """
 
-from enum import StrEnum
+from enum import Enum
 from celery.result import AsyncResult
 from app.workers.celery_app import celery_app
 
 
-class TaskState(StrEnum):
+class TaskState(str, Enum):
     PENDING = "PENDING"
     STARTED = "STARTED"
     PROCESSING = "PROCESSING"

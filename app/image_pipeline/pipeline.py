@@ -6,7 +6,7 @@ import numpy as np
 from app.services.preprocessor import preprocess_image_file, preprocess_dicom_file
 from .segmentor import run_pipeline as run_segmentation_pipeline, get_predictor, SegmentationResult
 from .quality_gate import is_valid_medical_image
-from .classifier import run_chexnet
+from .classifier_v2 import classify_image as run_chexnet
 from .gradcam import generate_gradcam
 from .schemas import ImagePipelineOutput, SegmentationOutput, ClassificationOutput
 
@@ -19,6 +19,16 @@ def run_image_explanation_chain(classification_label: str, chexnet_confidence: f
         classification={"label": classification_label, "confidence": chexnet_confidence},
         segmentation={}, # Placeholder
         sources=[] # Placeholder for ChromaDB citations
+    )
+
+
+def build_who_context(classification_label: str, chexnet_confidence: float, segmentation: dict) -> dict:
+    from app.services.image_analysis_service import build_who_image_outputs
+
+    return build_who_image_outputs(
+        label=classification_label,
+        confidence=chexnet_confidence,
+        segmentation=segmentation,
     )
 
 def run_image_pipeline(image_path: str, image_type: str) -> ImagePipelineOutput:
@@ -90,19 +100,36 @@ def run_image_pipeline(image_path: str, image_type: str) -> ImagePipelineOutput:
         confidence=confidence,
         bbox=bbox
     )
+    who_context = build_who_context(
+        classification_label=classification_res.label,
+        chexnet_confidence=classification_res.confidence,
+        segmentation={"bbox": bbox, "num_contours": len(contours or [])},
+    )
     
     classification_out = ClassificationOutput(
         label=classification_res.label,
         confidence=classification_res.confidence,
         probabilities=classification_res.probabilities,
-        gradcam_path=gradcam_path
+        gradcam_path=gradcam_path,
+        primary_finding=getattr(classification_res, "primary_finding", None),
+        primary_confidence=getattr(classification_res, "primary_confidence", None),
+        all_findings=[
+            finding.model_dump() if hasattr(finding, "model_dump") else finding.dict()
+            for finding in getattr(classification_res, "all_findings", [])
+        ],
+        detected_pathologies=list(getattr(classification_res, "detected_pathologies", []) or []),
+        no_finding=bool(getattr(classification_res, "no_finding", False)),
+        model_version=getattr(classification_res, "model_version", ""),
     )
 
     return ImagePipelineOutput(
         segmentation=segmentation_out,
         classification=classification_out,
-        explanation=explanation,
-        sources=[], # TODO: ChromaDB citations
-        uncertainty_flag=(confidence < 0.5 or classification_res.confidence < 0.5),
+        explanation=who_context["structured_explanation"].get("clinical_interpretation") or explanation,
+        sources=who_context["radiology_evidence"],
+        label_metadata=who_context["label_metadata"],
+        radiology_evidence=who_context["radiology_evidence"],
+        who_structured_report=who_context["who_structured_report"],
+        uncertainty_flag=(confidence < 0.5 or classification_res.confidence < 0.5 or who_context["structured_explanation"].get("uncertainty_flag", False)),
         disclaimer="AI-assisted analysis. NOT a medical diagnosis."
     )

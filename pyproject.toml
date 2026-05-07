@@ -11,8 +11,13 @@ dependencies = [
     "celery[redis]",
     "pydantic-settings",
     "python-multipart",
+    "qrcode[pil]",
+    "python-jose",
+    "paddlepaddle",
+    "paddleocr",
     "reportlab",
     "httpx",
+    "groq",
     "pytest",
     "pytest-asyncio",
 ]

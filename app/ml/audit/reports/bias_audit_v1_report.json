@@ -1,0 +1,128 @@
+{
+  "audit_version": "v1",
+  "generated_at": "2026-05-07T08:42:14.958430+00:00",
+  "total_records": 35,
+  "verified_claims_dataset": {
+    "path": "/home/techpark-5/Documents/Vaidyaa AI/vadiyaaAI/app/ml/audit/data/verified_claims_v1.csv",
+    "total_records": 205,
+    "verified_count": 163,
+    "refuted_count": 42,
+    "category_count": 21,
+    "categories": {
+      "anemia": 13,
+      "cardiology": 31,
+      "diabetes": 23,
+      "endocrinology": 13,
+      "gastroenterology": 4,
+      "hematology": 10,
+      "hepatology": 11,
+      "immunology": 5,
+      "infectious_disease": 5,
+      "nephrology": 12,
+      "neurology": 15,
+      "obstetrics": 6,
+      "oncology": 5,
+      "pediatrics": 5,
+      "pharmacology": 8,
+      "psychiatry": 6,
+      "pulmonology": 7,
+      "radiology": 10,
+      "rheumatology": 10,
+      "surgery": 3,
+      "urology": 3
+    },
+    "severities": {
+      "critical": 39,
+      "high": 65,
+      "low": 2,
+      "medium": 99
+    }
+  },
+  "overall_metrics": {
+    "count": 35,
+    "accuracy": 0.9143,
+    "precision": 0.875,
+    "recall": 1.0,
+    "false_negative_rate": 0.0
+  },
+  "gender_metrics": {
+    "male": {
+      "count": 18,
+      "accuracy": 0.8889,
+      "precision": 0.8333,
+      "recall": 1.0,
+      "false_negative_rate": 0.0
+    },
+    "female": {
+      "count": 17,
+      "accuracy": 0.9412,
+      "precision": 0.9167,
+      "recall": 1.0,
+      "false_negative_rate": 0.0
+    }
+  },
+  "age_group_metrics": {
+    "18_39": {
+      "count": 11,
+      "accuracy": 1.0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "false_negative_rate": 0.0
+    },
+    "40_64": {
+      "count": 14,
+      "accuracy": 0.8571,
+      "precision": 0.75,
+      "recall": 1.0,
+      "false_negative_rate": 0.0
+    },
+    "65_plus": {
+      "count": 10,
+      "accuracy": 0.9,
+      "precision": 0.8333,
+      "recall": 1.0,
+      "false_negative_rate": 0.0
+    }
+  },
+  "ethnicity_metrics": {
+    "asian": {
+      "count": 23,
+      "accuracy": 0.913,
+      "precision": 0.8889,
+      "recall": 1.0,
+      "false_negative_rate": 0.0
+    },
+    "other": {
+      "count": 12,
+      "accuracy": 0.9167,
+      "precision": 0.8333,
+      "recall": 1.0,
+      "false_negative_rate": 0.0
+    }
+  },
+  "region_metrics": {
+    "urban": {
+      "count": 20,
+      "accuracy": 0.95,
+      "precision": 0.9333,
+      "recall": 1.0,
+      "false_negative_rate": 0.0
+    },
+    "rural": {
+      "count": 15,
+      "accuracy": 0.8667,
+      "precision": 0.7778,
+      "recall": 1.0,
+      "false_negative_rate": 0.0
+    }
+  },
+  "bias_flags": {
+    "gender": {},
+    "age_group": {},
+    "ethnicity": {},
+    "region": {}
+  },
+  "sign_off_required": true,
+  "domain_lead_status": "PENDING",
+  "notes": "Bias audit v1 uses demographic synthetic ground truth for AC7 group slicing. The verified_claims_v1.csv dataset is included for claim verdict and hallucination regression checks."
+}

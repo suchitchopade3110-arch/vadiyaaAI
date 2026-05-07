@@ -5,7 +5,7 @@ Handles ALL input types before they hit ML models.
 
 PRD Layer 2 components (all implemented here):
   ✅ ClinicalBERT NER     → extract conditions, meds, lab values
-  ✅ OCR Engine           → Tesseract + PyMuPDF → raw text
+  ✅ OCR Engine           → PaddleOCR + PyMuPDF → raw text
   ✅ Image Normalizer     → Resize + CLAHE + Denoise
   ✅ DICOM Parser         → pydicom → slices + metadata
   ✅ Data Validator       → format check + quality score
@@ -18,6 +18,7 @@ PRD constraint: ClinicalBERT = NER ONLY. Never reasons. Never generates.
 
 import os
 import io
+import json
 import re
 import uuid
 import traceback
@@ -320,12 +321,30 @@ def normalize_image(
 
 def run_ocr(file_path: str) -> OcrOutput:
     """
-    OCR pipeline: Tesseract + PyMuPDF fallback.
+    OCR pipeline: PaddleOCR + PyMuPDF, with legacy Tesseract fallback.
     Handles PDF and image inputs.
 
     PRD: Lab Reports (PDF) → OCR → raw text → ClinicalBERT NER
     """
     ext = os.path.splitext(file_path)[1].lower()
+    if os.getenv("OCR_ENGINE", "paddle").lower() == "paddle":
+        try:
+            from app.services.ocr_service import extract_text_from_file
+
+            result = extract_text_from_file(file_path, file_type="pdf" if ext == ".pdf" else "image")
+            pages_payload = result.get("pages") or []
+            pages = [
+                page.get("text", "") if isinstance(page, dict) else str(page)
+                for page in pages_payload
+            ] or [result.get("full_text", "")]
+            return OcrOutput(
+                raw_text=result.get("full_text", ""),
+                confidence=float(result.get("avg_confidence", 0.0) or 0.0),
+                pages=pages,
+            )
+        except Exception as exc:
+            print(f"[OCR] PaddleOCR unavailable/failed: {exc}. Falling back to legacy OCR.")
+
     pages = []
     confidence = 0.0
 
@@ -448,12 +467,21 @@ def _get_ner_pipeline():
 
 def run_ner(text: str) -> NerOutput:
     """
-    ClinicalBERT NER extraction.
+    Clinical NER extraction.
     PRD: Extracts conditions, medications, lab values from clinical text.
     NEVER reasons. NEVER generates. Extraction ONLY.
 
-    Falls back to regex if ClinicalBERT unavailable.
+    Uses Groq Llama-3 when GROQ_API_KEY is present, then ClinicalBERT, then regex.
     """
+    if os.getenv("GROQ_API_KEY") and os.getenv("NER_ENGINE", "groq").lower() == "groq":
+        try:
+            from app.services.clinical_ner_service import run_clinical_pipeline
+
+            result = run_clinical_pipeline(text)
+            return _parse_groq_ner_result(result.get("entities", {}))
+        except Exception as e:
+            print(f"[Groq NER] Failed: {e}. Falling back to ClinicalBERT/regex.")
+
     pipe = _get_ner_pipeline()
 
     if pipe == "regex_fallback":
@@ -473,6 +501,77 @@ def run_ner(text: str) -> NerOutput:
     except Exception as e:
         print(f"[ClinicalBERT] NER inference failed: {e}. Using regex fallback.")
         return _regex_ner_fallback(text)
+
+
+def _parse_groq_ner_result(entities: Dict[str, Any]) -> NerOutput:
+    lab_values = []
+    for item in entities.get("lab_values", []) or []:
+        if not isinstance(item, dict):
+            continue
+        reference = item.get("reference_range", "") or item.get("reference", "")
+        ref_low, ref_high = _parse_reference_range(reference)
+        lab_values.append(
+            LabValue(
+                name=str(item.get("name", "")).strip(),
+                value=_safe_float(item.get("value")),
+                unit=str(item.get("unit", "")).strip(),
+                raw_text=json_safe_dumps(item),
+                ref_low=ref_low,
+                ref_high=ref_high,
+                flag=str(item.get("status", "")).upper() or None,
+                status="ABNORMAL" if str(item.get("status", "")).lower() in {"high", "low", "critical"} else "NORMAL",
+                is_abnormal=str(item.get("status", "")).lower() in {"high", "low", "critical"},
+                display_value="" if item.get("value") is None else str(item.get("value")),
+            )
+        )
+
+    medications = []
+    for med in entities.get("medications", []) or []:
+        if isinstance(med, dict):
+            text = " ".join(str(med.get(key, "")).strip() for key in ("name", "dose", "frequency") if med.get(key))
+            if text:
+                medications.append(text)
+        elif med:
+            medications.append(str(med))
+
+    raw_entities = [
+        {"entity_group": key, "word": value}
+        for key, values in entities.items()
+        for value in (values if isinstance(values, list) else [values])
+    ]
+
+    return NerOutput(
+        conditions=[str(item) for item in entities.get("conditions", []) or []],
+        medications=medications,
+        lab_values=lab_values,
+        dates=[],
+        clinical_flags=[str(item) for item in entities.get("symptoms", []) or []],
+        raw_entities=raw_entities,
+    )
+
+
+def _safe_float(value: Any) -> Optional[float]:
+    if value is None or value == "":
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        match = re.search(r"-?\d+(?:\.\d+)?", str(value))
+        return float(match.group(0)) if match else None
+
+
+def _parse_reference_range(reference: Any) -> Tuple[Optional[float], Optional[float]]:
+    numbers = re.findall(r"-?\d+(?:\.\d+)?", str(reference or ""))
+    if len(numbers) >= 2:
+        return float(numbers[0]), float(numbers[1])
+    return None, None
+
+
+def json_safe_dumps(value: Any) -> str:
+    try:
+        return json.dumps(value)
+    except Exception:
+        return str(value)
 
 
 JUNK_WORDS = {

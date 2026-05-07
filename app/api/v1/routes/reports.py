@@ -64,6 +64,7 @@ async def submit_report_analysis(
     patient_id: str = Form(None),
     gender: str = Form("male"),
     age: int = Form(40),
+    explanation_mode: str = Form("brief"),
 ):
     """
     Submit lab report / clinical note for analysis.
@@ -87,7 +88,7 @@ async def submit_report_analysis(
 
     # ── Dispatch Celery task ───────────────────────────────────────────────
     task = analyze_report_task.apply_async(
-        args=[file_path, patient_id, report_type, gender, age],
+        args=[file_path, patient_id, report_type, gender, age, explanation_mode],
         task_id=job_id,
         queue="reports",
     )

@@ -1,5 +1,6 @@
 from fastapi import APIRouter
-from datetime import UTC, datetime
+from datetime import timezone, datetime
+UTC = timezone.utc
 
 router = APIRouter()
 

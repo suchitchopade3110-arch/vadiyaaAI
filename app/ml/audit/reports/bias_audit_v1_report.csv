@@ -1,0 +1,10 @@
+group_type,group_name,count,accuracy,precision,recall,false_negative_rate,bias_flagged,bias_severity,gap_from_overall
+gender,male,18,0.8889,0.8333,1.0,0.0,False,,0
+gender,female,17,0.9412,0.9167,1.0,0.0,False,,0
+age_group,18_39,11,1.0,1.0,1.0,0.0,False,,0
+age_group,40_64,14,0.8571,0.75,1.0,0.0,False,,0
+age_group,65_plus,10,0.9,0.8333,1.0,0.0,False,,0
+ethnicity,asian,23,0.913,0.8889,1.0,0.0,False,,0
+ethnicity,other,12,0.9167,0.8333,1.0,0.0,False,,0
+region,urban,20,0.95,0.9333,1.0,0.0,False,,0
+region,rural,15,0.8667,0.7778,1.0,0.0,False,,0

@@ -8,7 +8,8 @@ Uses synchronous psycopg2 — Celery workers are sync, not async.
 
 import json
 import logging
-from datetime import UTC, datetime
+from datetime import timezone, datetime
+UTC = timezone.utc
 from uuid import UUID
 
 logger = logging.getLogger(__name__)

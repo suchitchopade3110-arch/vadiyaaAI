@@ -22,7 +22,8 @@ import logging
 import os
 import re
 import sqlite3
-from datetime import UTC, datetime
+from datetime import timezone, datetime
+UTC = timezone.utc
 from pathlib import Path
 
 import chromadb

@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import logging
-from datetime import UTC, datetime
+from datetime import timezone, datetime
+UTC = timezone.utc
 
 from app.services.rag_pipeline import MEDICAL_DISCLAIMER
 from app.workers.celery_app import celery_app

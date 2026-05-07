@@ -1,6 +1,7 @@
 import os
 import logging
-from datetime import UTC, datetime
+from datetime import timezone, datetime
+UTC = timezone.utc
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -35,7 +36,9 @@ from app.routes import (
     claims,
     images,
     jobs,
+    patient_history_routes,
     pdf_reports,
+    qr_reports,
     reports,
     text_routes,
     websocket_routes,
@@ -111,9 +114,11 @@ app.state.limiter = limiter
 app.include_router(api_router, prefix="/api/v1")
 app.include_router(text_routes.router, prefix="/api", tags=["Direct Text Pipeline"])
 app.include_router(websocket_routes.router)
+app.include_router(patient_history_routes.router)
 app.include_router(auth.router, prefix="/auth", tags=["auth"])
 # Removed duplicated routes that are already included via api_router
 app.include_router(pdf_reports.router, prefix="/api/v1", tags=["PDF Reports"])
+app.include_router(qr_reports.router)
 
 
 

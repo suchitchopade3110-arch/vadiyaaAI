@@ -1,0 +1,206 @@
+claim_id,claim_text,verdict,confidence,category,source,icd10,severity
+GT001,Elevated fasting glucose above 126 mg/dL on two separate tests is diagnostic of type 2 diabetes.,verified,0.95,diabetes,ADA Standards of Care 2024,E11,high
+GT002,HbA1c of 6.5% or above on two tests confirms diabetes mellitus.,verified,0.95,diabetes,ADA Standards of Care 2024,E11,high
+GT003,HbA1c of 9.0% indicates well-controlled diabetes.,refuted,0.92,diabetes,ADA Standards of Care 2024,E11,high
+GT004,Metformin is the first-line pharmacological treatment for type 2 diabetes.,verified,0.93,diabetes,ADA Standards of Care 2024,E11,medium
+GT005,A fasting glucose of 400 mg/dL is within normal range.,refuted,0.97,diabetes,ADA Standards of Care 2024,E11,critical
+GT006,HbA1c between 5.7% and 6.4% indicates prediabetes.,verified,0.94,diabetes,ADA Standards of Care 2024,E11,medium
+GT007,A fasting glucose of 110 mg/dL is diagnostic of type 2 diabetes.,refuted,0.90,diabetes,ADA Standards of Care 2024,E11,medium
+GT008,Insulin resistance is a key feature of type 2 diabetes pathophysiology.,verified,0.92,diabetes,WHO Diabetes Report 2023,E11,medium
+GT009,Type 1 diabetes is caused by autoimmune destruction of beta cells.,verified,0.95,diabetes,WHO Diabetes Report 2023,E10,high
+GT010,Diabetic ketoacidosis is a complication of type 1 diabetes.,verified,0.94,diabetes,WHO Diabetes Report 2023,E10,critical
+GT011,Hemoglobin below 13 g/dL in males indicates anemia.,verified,0.93,anemia,WHO Haemoglobin Thresholds 2011,D64,medium
+GT012,Hemoglobin below 12 g/dL in females indicates anemia.,verified,0.93,anemia,WHO Haemoglobin Thresholds 2011,D64,medium
+GT013,Hemoglobin of 2 g/dL is normal and requires no treatment.,refuted,0.97,anemia,WHO Haemoglobin Thresholds 2011,D64,critical
+GT014,Iron deficiency is the most common cause of anemia worldwide.,verified,0.92,anemia,WHO Global Anaemia Estimates 2021,D50,medium
+GT015,Vitamin B12 deficiency can cause megaloblastic anemia.,verified,0.94,anemia,Harrison's Principles of Internal Medicine,D51,medium
+GT016,Ferritin below 11 ng/mL indicates iron deficiency.,verified,0.91,anemia,WHO Iron Deficiency Guidelines,D50,medium
+GT017,Ferritin of 5 ng/mL in females is not clinically significant.,refuted,0.90,anemia,WHO Iron Deficiency Guidelines,D50,medium
+GT018,Reticulocyte count is elevated in hemolytic anemia.,verified,0.89,anemia,Harrison's Principles of Internal Medicine,D58,medium
+GT019,Sickle cell disease is an inherited hemoglobin disorder.,verified,0.95,anemia,WHO Sickle Cell Report,D57,high
+GT020,Platelet count below 150000 per microliter defines thrombocytopenia.,verified,0.93,hematology,Harrison's Principles of Internal Medicine,D69,medium
+GT021,Platelet count of 600000 is always benign.,refuted,0.91,hematology,Harrison's Principles of Internal Medicine,D75,medium
+GT022,WBC above 11000 per microliter may indicate infection or inflammation.,verified,0.90,hematology,Harrison's Principles of Internal Medicine,D72,medium
+GT023,WBC of 18000 suggests no infection.,refuted,0.92,hematology,Harrison's Principles of Internal Medicine,D72,high
+GT024,Neutrophilia is commonly associated with bacterial infection.,verified,0.91,hematology,Harrison's Principles of Internal Medicine,D72,medium
+GT025,Eosinophilia can indicate parasitic infection or allergic disease.,verified,0.89,hematology,Harrison's Principles of Internal Medicine,D72,medium
+GT026,LDL cholesterol above 100 mg/dL increases cardiovascular risk.,verified,0.92,cardiology,ACC/AHA Cholesterol Guidelines 2019,E78,medium
+GT027,LDL cholesterol above 190 mg/dL often indicates familial hypercholesterolemia.,verified,0.91,cardiology,ACC/AHA Cholesterol Guidelines 2019,E78,high
+GT028,HDL cholesterol below 40 mg/dL in males increases cardiovascular risk.,verified,0.90,cardiology,ACC/AHA Cholesterol Guidelines 2019,E78,medium
+GT029,HDL of 25 mg/dL in males is protective against heart disease.,refuted,0.93,cardiology,ACC/AHA Cholesterol Guidelines 2019,E78,medium
+GT030,Total cholesterol above 240 mg/dL is considered high.,verified,0.91,cardiology,ACC/AHA Cholesterol Guidelines 2019,E78,medium
+GT031,Statin therapy reduces cardiovascular mortality in high-risk patients.,verified,0.93,cardiology,ACC/AHA Cholesterol Guidelines 2019,E78,high
+GT032,Triglycerides above 200 mg/dL are elevated.,verified,0.90,cardiology,ACC/AHA Cholesterol Guidelines 2019,E78,medium
+GT033,Systolic blood pressure above 130 mmHg defines hypertension per AHA 2017.,verified,0.92,cardiology,AHA Hypertension Guidelines 2017,I10,medium
+GT034,A single blood pressure reading of 140/90 confirms hypertension.,refuted,0.88,cardiology,AHA Hypertension Guidelines 2017,I10,medium
+GT035,ACE inhibitors are first-line treatment for hypertension in diabetics.,verified,0.91,cardiology,AHA Hypertension Guidelines 2017,I10,medium
+GT036,Hypertension is a major risk factor for stroke.,verified,0.95,cardiology,WHO Cardiovascular Disease Report,I10,high
+GT037,Troponin elevation indicates myocardial injury.,verified,0.94,cardiology,ACC/AHA MI Guidelines,I21,critical
+GT038,ST elevation on ECG indicates STEMI requiring urgent intervention.,verified,0.95,cardiology,ACC/AHA MI Guidelines,I21,critical
+GT039,Aspirin is contraindicated in all cardiac patients.,refuted,0.92,cardiology,ACC/AHA MI Guidelines,I21,high
+GT040,Beta blockers reduce mortality in heart failure with reduced ejection fraction.,verified,0.93,cardiology,ACC/AHA Heart Failure Guidelines,I50,high
+GT041,Creatinine above 1.3 mg/dL in males may indicate impaired kidney function.,verified,0.91,nephrology,KDIGO CKD Guidelines 2012,N18,medium
+GT042,Creatinine of 3.5 mg/dL indicates normal kidney function.,refuted,0.95,nephrology,KDIGO CKD Guidelines 2012,N18,critical
+GT043,GFR below 60 mL/min/1.73m2 for 3 months defines chronic kidney disease.,verified,0.93,nephrology,KDIGO CKD Guidelines 2012,N18,high
+GT044,Proteinuria is an early marker of kidney damage in diabetics.,verified,0.92,nephrology,KDIGO CKD Guidelines 2012,N18,medium
+GT045,Hyperkalemia above 5.5 mEq/L requires urgent management.,verified,0.93,nephrology,Harrison's Principles of Internal Medicine,E87,critical
+GT046,Potassium of 6.5 mEq/L is safe and requires no intervention.,refuted,0.94,nephrology,Harrison's Principles of Internal Medicine,E87,critical
+GT047,Sodium below 135 mEq/L defines hyponatremia.,verified,0.92,nephrology,Harrison's Principles of Internal Medicine,E87,medium
+GT048,Sodium of 120 mEq/L is within normal electrolyte range.,refuted,0.95,nephrology,Harrison's Principles of Internal Medicine,E87,critical
+GT049,Dialysis is indicated when GFR falls below 15 mL/min.,verified,0.90,nephrology,KDIGO CKD Guidelines 2012,N18,critical
+GT050,Urine albumin-to-creatinine ratio above 30 mg/g indicates microalbuminuria.,verified,0.91,nephrology,KDIGO CKD Guidelines 2012,N18,medium
+GT051,TSH above 4.5 mIU/L suggests hypothyroidism.,verified,0.91,endocrinology,ATA Thyroid Guidelines 2014,E03,medium
+GT052,TSH of 8.5 mIU/L is within the normal thyroid range.,refuted,0.93,endocrinology,ATA Thyroid Guidelines 2014,E03,high
+GT053,TSH below 0.4 mIU/L suggests hyperthyroidism.,verified,0.91,endocrinology,ATA Thyroid Guidelines 2014,E05,medium
+GT054,Levothyroxine is the standard treatment for hypothyroidism.,verified,0.93,endocrinology,ATA Thyroid Guidelines 2014,E03,medium
+GT055,Graves disease is an autoimmune cause of hyperthyroidism.,verified,0.92,endocrinology,ATA Thyroid Guidelines 2014,E05,medium
+GT056,Vitamin D deficiency is defined as serum 25-OH vitamin D below 20 ng/mL.,verified,0.91,endocrinology,Endocrine Society Vitamin D Guidelines,E55,medium
+GT057,Vitamin D above 150 ng/mL can cause toxicity.,verified,0.90,endocrinology,Endocrine Society Vitamin D Guidelines,E55,high
+GT058,Calcium above 10.5 mg/dL defines hypercalcemia.,verified,0.91,endocrinology,Harrison's Principles of Internal Medicine,E83,medium
+GT059,ALT above 56 U/L suggests hepatocellular damage.,verified,0.91,hepatology,AASLD Liver Guidelines,K76,medium
+GT060,ALT of 88 U/L is within normal liver enzyme range.,refuted,0.92,hepatology,AASLD Liver Guidelines,K76,medium
+GT061,Bilirubin above 1.2 mg/dL indicates hyperbilirubinemia.,verified,0.91,hepatology,AASLD Liver Guidelines,K76,medium
+GT062,Hepatitis B surface antigen positivity indicates active or chronic infection.,verified,0.93,hepatology,WHO Hepatitis B Guidelines,B18,high
+GT063,Elevated AST with elevated ALT suggests liver parenchymal disease.,verified,0.90,hepatology,AASLD Liver Guidelines,K76,medium
+GT064,Alcohol consumption is a major cause of liver cirrhosis.,verified,0.93,hepatology,AASLD Liver Guidelines,K74,high
+GT065,Albumin below 3.5 g/dL suggests malnutrition or chronic liver disease.,verified,0.90,hepatology,Harrison's Principles of Internal Medicine,K76,medium
+GT066,PSA above 4 ng/mL may indicate prostate pathology requiring evaluation.,verified,0.89,oncology,AUA Prostate Cancer Guidelines,C61,medium
+GT067,CA-125 elevation is specific to ovarian cancer diagnosis.,refuted,0.90,oncology,ASCO Ovarian Cancer Guidelines,C56,medium
+GT068,CEA is used as a tumor marker for colorectal cancer monitoring.,verified,0.90,oncology,ASCO Colorectal Cancer Guidelines,C18,medium
+GT069,Mammography can detect breast cancer up to 3 years before clinical presentation.,verified,0.91,oncology,WHO Breast Cancer Screening,C50,high
+GT070,Pap smear screens for cervical cancer caused by HPV.,verified,0.93,oncology,WHO Cervical Cancer Guidelines,C53,high
+GT071,Consolidation on chest X-ray is associated with pneumonia.,verified,0.92,radiology,WHO Diagnostic Imaging Protocols,J18,high
+GT072,Ground-glass opacity on CT is a typical finding in COVID-19 pneumonia.,verified,0.91,radiology,WHO COVID-19 Imaging Guidelines,U07,high
+GT073,Pneumothorax appears as absent lung markings on chest X-ray.,verified,0.92,radiology,WHO Diagnostic Imaging Protocols,J93,critical
+GT074,Pleural effusion causes blunting of costophrenic angle on chest X-ray.,verified,0.91,radiology,WHO Diagnostic Imaging Protocols,J90,medium
+GT075,Bamboo spine appearance is pathognomonic of ankylosing spondylitis.,verified,0.92,radiology,WHO Diagnostic Imaging Protocols,M45,medium
+GT076,Sunburst periosteal reaction is associated with osteosarcoma.,verified,0.93,radiology,WHO Diagnostic Imaging Protocols,C40,critical
+GT077,Free air under diaphragm on X-ray indicates bowel perforation.,verified,0.94,radiology,WHO Diagnostic Imaging Protocols,K63,critical
+GT078,Microcalcifications on mammography may indicate early breast malignancy.,verified,0.91,radiology,WHO Breast Cancer Screening,C50,high
+GT079,Dilated bowel loops with air-fluid levels indicate intestinal obstruction.,verified,0.92,radiology,WHO Diagnostic Imaging Protocols,K56,critical
+GT080,Honeycombing on CT is characteristic of pulmonary fibrosis.,verified,0.91,radiology,WHO Diagnostic Imaging Protocols,J84,medium
+GT081,CRP above 10 mg/L indicates significant inflammation.,verified,0.90,immunology,Harrison's Principles of Internal Medicine,R79,medium
+GT082,ESR elevation is non-specific but suggests inflammatory process.,verified,0.88,immunology,Harrison's Principles of Internal Medicine,R79,low
+GT083,ANA positivity is associated with systemic lupus erythematosus.,verified,0.90,immunology,ACR SLE Guidelines,M32,medium
+GT084,Rheumatoid factor positivity confirms rheumatoid arthritis diagnosis.,refuted,0.89,immunology,ACR RA Guidelines,M05,medium
+GT085,Procalcitonin above 0.5 ng/mL suggests bacterial infection.,verified,0.90,immunology,Harrison's Principles of Internal Medicine,R65,medium
+GT086,HIV RNA viral load below 200 copies/mL indicates viral suppression.,verified,0.92,infectious_disease,WHO HIV Treatment Guidelines,B20,high
+GT087,CD4 count below 200 cells/mm3 defines AIDS.,verified,0.93,infectious_disease,WHO HIV Treatment Guidelines,B24,critical
+GT088,Malaria is diagnosed by peripheral blood smear or RDT.,verified,0.92,infectious_disease,WHO Malaria Treatment Guidelines,B54,high
+GT089,Antibiotic treatment is indicated for all viral respiratory infections.,refuted,0.93,infectious_disease,WHO Antimicrobial Resistance Report,J06,high
+GT090,Rifampicin is a first-line drug for tuberculosis treatment.,verified,0.93,infectious_disease,WHO TB Treatment Guidelines,A15,high
+GT091,SpO2 below 94% on room air requires oxygen supplementation.,verified,0.92,pulmonology,WHO Oxygen Therapy Guidelines,R09,high
+GT092,FEV1/FVC ratio below 0.7 confirms obstructive lung disease.,verified,0.91,pulmonology,GOLD COPD Guidelines 2023,J44,high
+GT093,Bronchodilators are the cornerstone of COPD management.,verified,0.92,pulmonology,GOLD COPD Guidelines 2023,J44,medium
+GT094,Pulmonary embolism is diagnosed by CT pulmonary angiography.,verified,0.92,pulmonology,ESC PE Guidelines 2019,I26,critical
+GT095,D-dimer elevation is specific for pulmonary embolism diagnosis.,refuted,0.91,pulmonology,ESC PE Guidelines 2019,I26,high
+GT096,Asthma is characterized by reversible airway obstruction.,verified,0.92,pulmonology,GINA Asthma Guidelines 2023,J45,medium
+GT097,Inhaled corticosteroids are first-line controller therapy for persistent asthma.,verified,0.92,pulmonology,GINA Asthma Guidelines 2023,J45,medium
+GT098,Uric acid above 7 mg/dL in males is associated with gout.,verified,0.91,rheumatology,ACR Gout Guidelines,M10,medium
+GT099,Joint space narrowing on X-ray indicates cartilage loss in osteoarthritis.,verified,0.90,rheumatology,ACR OA Guidelines,M17,medium
+GT100,NSAIDs are contraindicated in all patients with joint pain.,refuted,0.90,rheumatology,ACR Pain Management Guidelines,M79,medium
+GT101,INR above 3.0 in a patient on warfarin indicates supratherapeutic anticoagulation.,verified,0.91,hematology,ACC Anticoagulation Guidelines,Z79,high
+GT102,PT-INR of 1.0 is elevated and indicates bleeding risk.,refuted,0.92,hematology,ACC Anticoagulation Guidelines,Z79,medium
+GT103,Serum potassium below 3.5 mEq/L defines hypokalemia.,verified,0.92,nephrology,Harrison's Principles of Internal Medicine,E87,medium
+GT104,Magnesium below 1.7 mg/dL defines hypomagnesemia.,verified,0.89,nephrology,Harrison's Principles of Internal Medicine,E83,medium
+GT105,BNP above 100 pg/mL suggests heart failure.,verified,0.91,cardiology,ACC Heart Failure Guidelines,I50,high
+GT106,Ejection fraction below 40% defines heart failure with reduced ejection fraction.,verified,0.92,cardiology,ACC Heart Failure Guidelines,I50,high
+GT107,Digoxin toxicity can cause life-threatening arrhythmias.,verified,0.92,cardiology,Harrison's Principles of Internal Medicine,T46,critical
+GT108,QTc prolongation above 500ms increases risk of torsades de pointes.,verified,0.91,cardiology,Harrison's Principles of Internal Medicine,I49,critical
+GT109,Warfarin dose should never be adjusted based on INR.,refuted,0.93,hematology,ACC Anticoagulation Guidelines,Z79,high
+GT110,Hypoglycemia is defined as blood glucose below 70 mg/dL.,verified,0.92,diabetes,ADA Standards of Care 2024,E16,high
+GT111,Severe hypoglycemia requires glucagon administration.,verified,0.92,diabetes,ADA Standards of Care 2024,E16,critical
+GT112,Sulfonylureas can cause hypoglycemia as a side effect.,verified,0.91,diabetes,ADA Standards of Care 2024,E11,medium
+GT113,SGLT2 inhibitors reduce cardiovascular mortality in diabetics.,verified,0.91,diabetes,ADA Standards of Care 2024,E11,high
+GT114,GLP-1 receptor agonists promote weight loss in obese diabetics.,verified,0.90,diabetes,ADA Standards of Care 2024,E11,medium
+GT115,Microalbuminuria is an early sign of diabetic nephropathy.,verified,0.91,diabetes,KDIGO CKD Guidelines 2012,N08,medium
+GT116,Diabetic retinopathy is the leading cause of blindness in working-age adults.,verified,0.92,diabetes,WHO Diabetes Complications Report,H36,high
+GT117,All diabetic patients should have annual eye examination.,verified,0.91,diabetes,ADA Standards of Care 2024,E11,medium
+GT118,Peripheral neuropathy is a common complication of long-standing diabetes.,verified,0.91,diabetes,ADA Standards of Care 2024,E11,medium
+GT119,Foot ulcers in diabetics require urgent assessment to prevent amputation.,verified,0.92,diabetes,ADA Standards of Care 2024,E11,critical
+GT120,Pancreatic beta cell function is preserved in type 2 diabetes.,refuted,0.89,diabetes,ADA Standards of Care 2024,E11,medium
+GT121,Serum ferritin is elevated in iron deficiency anemia.,refuted,0.91,anemia,WHO Iron Deficiency Guidelines,D50,medium
+GT122,Transferrin saturation below 20% suggests iron deficiency.,verified,0.90,anemia,WHO Iron Deficiency Guidelines,D50,medium
+GT123,Folate deficiency causes microcytic anemia.,refuted,0.91,anemia,Harrison's Principles of Internal Medicine,D52,medium
+GT124,Thalassemia is a genetic disorder affecting hemoglobin synthesis.,verified,0.92,anemia,WHO Thalassemia Report,D56,high
+GT125,Bone marrow biopsy is indicated for unexplained pancytopenia.,verified,0.90,hematology,Harrison's Principles of Internal Medicine,D61,high
+GT126,Streptokinase is used as thrombolytic therapy in STEMI.,verified,0.90,cardiology,WHO Essential Medicines List,I21,critical
+GT127,Heparin is used for anticoagulation in acute coronary syndrome.,verified,0.91,cardiology,ACC/AHA ACS Guidelines,I24,critical
+GT128,Cardiac biomarkers are normal in stable angina.,verified,0.90,cardiology,ACC/AHA ACS Guidelines,I20,medium
+GT129,Chest pain radiating to left arm is a classic symptom of myocardial infarction.,verified,0.91,cardiology,ACC/AHA MI Guidelines,I21,critical
+GT130,ECG is normal in all cases of myocardial infarction.,refuted,0.93,cardiology,ACC/AHA MI Guidelines,I21,critical
+GT131,Oxygen therapy should be given to all MI patients regardless of SpO2.,refuted,0.90,cardiology,ACC/AHA MI Guidelines,I21,high
+GT132,Morphine is routinely recommended for all chest pain in ACS.,refuted,0.89,cardiology,ACC/AHA ACS Guidelines,I24,high
+GT133,Coronary artery disease is the leading cause of death globally.,verified,0.93,cardiology,WHO Cardiovascular Disease Report,I25,high
+GT134,Exercise stress test is used to evaluate suspected coronary artery disease.,verified,0.90,cardiology,ACC/AHA CAD Guidelines,I25,medium
+GT135,Atrial fibrillation increases risk of stroke fivefold.,verified,0.92,cardiology,ESC AF Guidelines 2020,I48,high
+GT136,CHA2DS2-VASc score guides anticoagulation in atrial fibrillation.,verified,0.91,cardiology,ESC AF Guidelines 2020,I48,high
+GT137,Rate control is preferred over rhythm control in all AF patients.,refuted,0.89,cardiology,ESC AF Guidelines 2020,I48,medium
+GT138,Stroke is classified as hemorrhagic or ischemic.,verified,0.93,neurology,AHA Stroke Guidelines 2019,I63,critical
+GT139,tPA is indicated for ischemic stroke within 4.5 hours of symptom onset.,verified,0.92,neurology,AHA Stroke Guidelines 2019,I63,critical
+GT140,CT head without contrast is the first investigation in suspected stroke.,verified,0.93,neurology,AHA Stroke Guidelines 2019,I63,critical
+GT141,All strokes are hemorrhagic and contraindicate tPA.,refuted,0.94,neurology,AHA Stroke Guidelines 2019,I63,critical
+GT142,NIHSS score quantifies stroke severity.,verified,0.90,neurology,AHA Stroke Guidelines 2019,I63,high
+GT143,Seizure is always caused by epilepsy.,refuted,0.91,neurology,WHO Epilepsy Guidelines,G40,medium
+GT144,Levetiracetam is a commonly used antiepileptic drug.,verified,0.90,neurology,WHO Epilepsy Guidelines,G40,medium
+GT145,Lumbar puncture is contraindicated when there is raised intracranial pressure.,verified,0.91,neurology,Harrison's Principles of Internal Medicine,G93,critical
+GT146,Multiple sclerosis is a demyelinating disease of the CNS.,verified,0.92,neurology,WHO MS Guidelines,G35,high
+GT147,MRI is the investigation of choice for multiple sclerosis diagnosis.,verified,0.92,neurology,WHO MS Guidelines,G35,high
+GT148,Parkinson disease is characterized by dopamine deficiency in substantia nigra.,verified,0.92,neurology,WHO Parkinson Guidelines,G20,high
+GT149,Levodopa is the most effective treatment for motor symptoms of Parkinson disease.,verified,0.91,neurology,WHO Parkinson Guidelines,G20,medium
+GT150,Alzheimer disease is the most common cause of dementia.,verified,0.92,neurology,WHO Dementia Report 2021,F00,high
+GT151,GCS score of 15 indicates deep coma.,refuted,0.93,neurology,Harrison's Principles of Internal Medicine,R40,critical
+GT152,GCS score below 8 indicates severe brain injury.,verified,0.92,neurology,Harrison's Principles of Internal Medicine,R40,critical
+GT153,Peptic ulcer disease is associated with H. pylori infection.,verified,0.92,gastroenterology,WHO H. pylori Guidelines,K25,high
+GT154,PPIs are first-line treatment for GERD.,verified,0.91,gastroenterology,ACG GERD Guidelines,K21,medium
+GT155,Colonoscopy is recommended every 10 years for colorectal cancer screening from age 45.,verified,0.91,gastroenterology,ACG Colorectal Screening Guidelines,Z12,medium
+GT156,Inflammatory bowel disease includes Crohn disease and ulcerative colitis.,verified,0.92,gastroenterology,ECCO IBD Guidelines,K51,medium
+GT157,Hepatitis C can be cured with direct-acting antiviral agents.,verified,0.93,hepatology,AASLD Hepatitis C Guidelines,B17,high
+GT158,Liver cirrhosis can be reversed with medication in all patients.,refuted,0.92,hepatology,AASLD Liver Guidelines,K74,high
+GT159,Ascites in cirrhosis is managed with sodium restriction and diuretics.,verified,0.91,hepatology,AASLD Liver Guidelines,K74,medium
+GT160,Liver transplantation is the definitive treatment for end-stage liver disease.,verified,0.91,hepatology,AASLD Liver Guidelines,K74,critical
+GT161,Osteoporosis is defined by T-score of -2.5 or below on DEXA scan.,verified,0.92,rheumatology,WHO Osteoporosis Guidelines,M81,medium
+GT162,Bisphosphonates reduce fracture risk in osteoporosis.,verified,0.91,rheumatology,WHO Osteoporosis Guidelines,M81,medium
+GT163,Calcium and vitamin D supplementation supports bone health.,verified,0.90,rheumatology,WHO Osteoporosis Guidelines,M81,low
+GT164,Osteoporosis only affects women.,refuted,0.91,rheumatology,WHO Osteoporosis Guidelines,M81,medium
+GT165,Gout attacks are precipitated by hyperuricemia.,verified,0.91,rheumatology,ACR Gout Guidelines,M10,medium
+GT166,Colchicine is used for acute gout attacks.,verified,0.90,rheumatology,ACR Gout Guidelines,M10,medium
+GT167,Allopurinol reduces uric acid production.,verified,0.91,rheumatology,ACR Gout Guidelines,M10,medium
+GT168,Appendicitis typically presents with periumbilical pain migrating to right iliac fossa.,verified,0.92,surgery,Harrison's Principles of Internal Medicine,K37,high
+GT169,Appendicitis is always managed conservatively without surgery.,refuted,0.93,surgery,Harrison's Principles of Internal Medicine,K37,critical
+GT170,Murphy's sign is positive in cholecystitis.,verified,0.90,surgery,Harrison's Principles of Internal Medicine,K81,medium
+GT171,Renal calculi typically present with colicky loin-to-groin pain.,verified,0.91,urology,EAU Urolithiasis Guidelines,N20,high
+GT172,Small renal stones below 5mm often pass spontaneously.,verified,0.90,urology,EAU Urolithiasis Guidelines,N20,medium
+GT173,Benign prostatic hyperplasia is treated with alpha blockers as first line.,verified,0.90,urology,AUA BPH Guidelines,N40,medium
+GT174,Eclampsia is characterized by seizures in a hypertensive pregnant woman.,verified,0.92,obstetrics,WHO Pregnancy Complications Guidelines,O15,critical
+GT175,Pre-eclampsia is defined by hypertension and proteinuria after 20 weeks gestation.,verified,0.92,obstetrics,WHO Pregnancy Complications Guidelines,O14,critical
+GT176,Gestational diabetes increases risk of type 2 diabetes later in life.,verified,0.91,obstetrics,ADA Gestational Diabetes Guidelines,O24,high
+GT177,Folic acid supplementation prevents neural tube defects.,verified,0.93,obstetrics,WHO Folic Acid Guidelines,O35,high
+GT178,Premature rupture of membranes before 37 weeks requires immediate delivery.,refuted,0.89,obstetrics,WHO Preterm Birth Guidelines,O42,high
+GT179,Group B streptococcus screening is recommended at 35-37 weeks gestation.,verified,0.90,obstetrics,ACOG GBS Guidelines,O99,medium
+GT180,Childhood vaccination prevents measles mumps and rubella.,verified,0.94,pediatrics,WHO Immunization Schedule,Z23,high
+GT181,MMR vaccine causes autism.,refuted,0.98,pediatrics,WHO Vaccine Safety Advisory,Z23,critical
+GT182,Oral rehydration therapy is first-line treatment for childhood diarrhea.,verified,0.93,pediatrics,WHO Diarrhea Management Guidelines,A09,high
+GT183,Zinc supplementation reduces duration of childhood diarrhea.,verified,0.90,pediatrics,WHO Diarrhea Management Guidelines,A09,medium
+GT184,Exclusive breastfeeding is recommended for the first 6 months of life.,verified,0.93,pediatrics,WHO Breastfeeding Guidelines,Z39,high
+GT185,Penicillin allergy prevents use of all antibiotics.,refuted,0.91,pharmacology,Harrison's Principles of Internal Medicine,Z88,medium
+GT186,Aminoglycosides are nephrotoxic and ototoxic.,verified,0.91,pharmacology,Harrison's Principles of Internal Medicine,T36,high
+GT187,Fluoroquinolones should be avoided in children under 18.,verified,0.90,pharmacology,WHO Essential Medicines Guidelines,J01,medium
+GT188,Corticosteroids suppress the immune system.,verified,0.92,pharmacology,Harrison's Principles of Internal Medicine,H02,medium
+GT189,NSAIDs increase risk of gastrointestinal bleeding.,verified,0.91,pharmacology,WHO Drug Safety Guidelines,M01,medium
+GT190,ACE inhibitors are contraindicated in pregnancy.,verified,0.92,pharmacology,WHO Drug Safety in Pregnancy,O99,critical
+GT191,Statins are safe to use in pregnancy.,refuted,0.91,pharmacology,WHO Drug Safety in Pregnancy,O99,high
+GT192,Methotrexate is teratogenic and contraindicated in pregnancy.,verified,0.92,pharmacology,WHO Drug Safety in Pregnancy,O99,critical
+GT193,Insulin dose should never be adjusted in type 1 diabetics.,refuted,0.93,diabetes,ADA Standards of Care 2024,E10,critical
+GT194,Continuous glucose monitoring improves glycemic control in type 1 diabetes.,verified,0.91,diabetes,ADA Standards of Care 2024,E10,medium
+GT195,Depression is associated with increased cardiovascular mortality.,verified,0.90,psychiatry,WHO Mental Health Report 2022,F32,high
+GT196,SSRIs are first-line pharmacological treatment for major depression.,verified,0.91,psychiatry,WHO Mental Health Guidelines,F32,medium
+GT197,Lithium is used for mood stabilization in bipolar disorder.,verified,0.91,psychiatry,WHO Mental Health Guidelines,F31,medium
+GT198,Schizophrenia is caused exclusively by dopamine excess.,refuted,0.89,psychiatry,WHO Mental Health Guidelines,F20,medium
+GT199,Antipsychotics treat positive symptoms of schizophrenia.,verified,0.91,psychiatry,WHO Mental Health Guidelines,F20,medium
+GT200,Cognitive behavioral therapy is effective for anxiety disorders.,verified,0.91,psychiatry,WHO Mental Health Guidelines,F41,medium
+GT201,Elevated ACTH with low cortisol suggests primary adrenal insufficiency.,verified,0.90,endocrinology,Endocrine Society Guidelines,E27,high
+GT202,Cushing syndrome is caused by excess cortisol.,verified,0.92,endocrinology,Endocrine Society Guidelines,E24,high
+GT203,Addison disease presents with hyperpigmentation and hypotension.,verified,0.91,endocrinology,Endocrine Society Guidelines,E27,high
+GT204,Pheochromocytoma causes episodic hypertension.,verified,0.91,endocrinology,Endocrine Society Guidelines,D35,high
+GT205,Growth hormone deficiency in adults causes no clinical symptoms.,refuted,0.89,endocrinology,Endocrine Society Guidelines,E23,medium
