@@ -16,11 +16,14 @@ from celery import Task
 from app.workers.celery_app import celery_app
 from app.core.disclaimer import MEDICAL_DISCLAIMER
 from app.core.config import settings
-from typing import List, Optional, Dict, Any, Tuple
-from app.services.preprocessor import clean_conditions, validate_file, run_ocr, run_ner, LAB_REGISTRY, LabValue, extract_all_lab_values
-from app.ml.predictor import predict_safe
+from typing import List, Optional, Dict, Any
+from app.services.preprocessor import clean_conditions, validate_file, run_ocr, LabValue, extract_all_lab_values
 from clinical_reference import analyze_blood_report, enrich_lab_with_who_ranges, clean_test_name
 from app.services.rag_pipeline import rag_pipeline
+from app.services.speed_optimizations import (
+    predict_safe_cached,
+    run_ner_and_rag_parallel_sync,
+)
 from app.workers.db_persist import persist_report, mark_failed
 
 import logging
@@ -273,9 +276,11 @@ def analyze_report(self, report_id: str, file_path: str, report_type: str, file_
         ocr_result = run_ocr(file_path)
         raw_text   = ocr_result.raw_text
 
-        # Step 3: Clinical NER (Groq when GROQ_API_KEY is set; fallback otherwise)
-        self.update_state(state="PROGRESS", meta={"step": "ner", "pct": 35})
-        ner_result = run_ner(raw_text)
+        # Step 3: Clinical NER + RAG retrieval in parallel.
+        self.update_state(state="PROGRESS", meta={"step": "ner+rag", "pct": 35})
+        t_parallel = time.time()
+        ner_result, sources = run_ner_and_rag_parallel_sync(raw_text)
+        logger.info(f"[{report_id}] NER+RAG completed in {round(time.time() - t_parallel, 2)}s")
         
         if report_type == "lab":
             ner_result.lab_values = enrich_lab_with_who_ranges(
@@ -325,7 +330,7 @@ def analyze_report(self, report_id: str, file_path: str, report_type: str, file_
 
         # Step 3: XGBoost via predict_safe()
         self.update_state(state="PROGRESS", meta={"step": "xgboost", "pct": 55})
-        ml_result    = predict_safe(ml_features)
+        ml_result    = predict_safe_cached(ml_features)
         risk_score   = ml_result["risk_score"]
         confidence   = ml_result["confidence"]
         shap_values  = ml_result["shap_values"]
@@ -363,10 +368,9 @@ def analyze_report(self, report_id: str, file_path: str, report_type: str, file_
         else:
             risk_score = adjust_risk_for_anomalies(risk_score, anomalies)
 
-        # Step 4: RAG retrieval & Explanation (Phase 2)
+        # Step 4: Explanation (RAG sources were already retrieved alongside NER)
         self.update_state(state="PROGRESS", meta={"step": "rag", "pct": 75})
-        sources = rag_pipeline.retrieve_evidence(raw_text[:500])
-        
+
         source_count = len(sources)
         explanation = rag_pipeline.explain_report(
             entities=entities,

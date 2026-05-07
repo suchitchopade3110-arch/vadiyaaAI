@@ -84,7 +84,8 @@ function ClaimVerifier() {
       }
 
       const submitData = await submitRes.json();
-      const claimId = submitData.id;
+      const claimId = submitData.job_id || submitData.id || submitData.task_id || submitData.claim_id;
+      if (!claimId) throw new Error('No job ID returned from API');
       setJobId(claimId.slice(0, 8));
 
       // Poll for result

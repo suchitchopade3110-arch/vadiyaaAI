@@ -1,5 +1,6 @@
 import os
 import logging
+import threading
 from datetime import timezone, datetime
 UTC = timezone.utc
 
@@ -58,6 +59,14 @@ async def lifespan(app: FastAPI):
     setup_logging()
     log.info("VaidyaAI API starting up — frontend served at /ui")
     log.info(f"Frontend path: {_FRONTEND_DIR}")
+    try:
+        from app.services.speed_optimizations import prewarm_groq, verify_cache_connection
+
+        verify_cache_connection()
+        threading.Thread(target=prewarm_groq, daemon=True).start()
+        log.info("Groq pre-warm initiated in background")
+    except Exception as exc:
+        log.warning("Startup speed warmup skipped: %s", exc)
     yield
     log.info("VaidyaAI API shutting down")
 
