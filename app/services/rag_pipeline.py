@@ -15,7 +15,7 @@ from app.utils.retry import with_retry
 
 logger = logging.getLogger(__name__)
 
-MODEL = os.getenv("GROQ_RAG_MODEL", os.getenv("GROQ_MODEL", "llama3-8b-8192"))
+MODEL = os.getenv("GROQ_RAG_MODEL", os.getenv("GROQ_MODEL", "llama-3.1-8b-instant"))
 
 _groq = None
 _chroma_client = None
@@ -43,9 +43,10 @@ def _get_chroma():
     import chromadb
     from chromadb.config import Settings
 
+    use_http = os.getenv("CHROMADB_USE_HTTP", "").lower() in {"1", "true", "yes"}
     host = os.getenv("CHROMADB_HOST") or getattr(settings, "CHROMADB_HOST", "")
     port = os.getenv("CHROMADB_PORT") or getattr(settings, "CHROMADB_PORT", "")
-    if host and port:
+    if use_http and host and port:
         try:
             _chroma_client = chromadb.HttpClient(host=host, port=int(port))
             _chroma_client.heartbeat()

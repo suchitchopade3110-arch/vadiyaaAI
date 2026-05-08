@@ -54,9 +54,11 @@ torchvision==0.18.0+cpu
 
 # ── NLP / LLM (Phase 1: install only; Phase 2: wire) ─────────────────────────
 transformers==4.41.1             # ClinicalBERT, BioGPT
+sacremoses==0.1.1                # Required by BioGptTokenizer
 langchain==0.2.1
 langchain-community==0.2.1
 chromadb==0.5.0
+posthog<4                        # ChromaDB 0.5 telemetry API compatibility
 
 # ── Explainability (Phase 2) ──────────────────────────────────────────────────
 shap==0.45.1

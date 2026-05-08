@@ -9,7 +9,7 @@ from typing import Any
 
 from app.services.urinalysis_knowledge_base import URINE_NER_PROMPT
 
-MODEL = os.getenv("GROQ_NER_MODEL", "llama3-8b-8192")
+MODEL = os.getenv("GROQ_NER_MODEL", os.getenv("GROQ_MODEL", "llama-3.1-8b-instant"))
 
 
 NER_PROMPT = """You are a clinical NER system. Extract ALL medical entities from the text below.

@@ -32,6 +32,7 @@ celery_app.conf.update(
     # Retry policy
     task_max_retries=3,
     task_default_retry_delay=5,   # seconds
+    broker_connection_retry_on_startup=True,
     
     # Result expiry
     result_expires=3600,   # 1 hour

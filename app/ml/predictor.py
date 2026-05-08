@@ -63,7 +63,11 @@ def _load_models():
 
         _model     = joblib.load(_PKL["model"])
         _scaler    = joblib.load(_PKL["scaler"])
-        _explainer = joblib.load(_PKL["explainer"])
+        try:
+            _explainer = joblib.load(_PKL["explainer"])
+        except Exception as exc:
+            log.warning("SHAP explainer pickle failed to load; will regenerate from model: %s", exc)
+            _explainer = None
         log.info(f"ML models loaded: {type(_model).__name__}, {type(_scaler).__name__}")
         
         # Issue 2 Fix: Extract features exactly as model expects them

@@ -9,7 +9,7 @@ from typing import Any
 from groq import Groq
 
 
-MODEL = os.getenv("GROQ_DDX_MODEL", "llama3-8b-8192")
+MODEL = os.getenv("GROQ_DDX_MODEL", os.getenv("GROQ_MODEL", "llama-3.1-8b-instant"))
 DISCLAIMER = "AI-assisted analysis. NOT a medical diagnosis. Consult a qualified healthcare professional."
 
 

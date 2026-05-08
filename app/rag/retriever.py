@@ -14,7 +14,7 @@ Responsibilities:
 - expose retrieve_evidence(query, top_k) → dict
 
 ChromaDB path: set via env var CHROMA_PATH
-  default: ~/vaidyaAI_week1_clean/chromadb (matches Subhiksha's Drive structure)
+  default: data/chromadb
   override in .env: CHROMA_PATH=/absolute/path/to/chromadb
 """
 
@@ -27,6 +27,7 @@ UTC = timezone.utc
 from pathlib import Path
 
 import chromadb
+from chromadb.config import Settings
 import numpy as np
 import torch
 from transformers import BioGptModel, BioGptTokenizer
@@ -76,7 +77,7 @@ log = logging.getLogger(__name__)
 # ── Config from env ───────────────────────────────────────────────────────────
 CHROMA_PATH = os.path.abspath(os.path.expanduser(os.getenv(
     "CHROMA_PATH",
-    os.path.expanduser("~/vaidyaAI_week1_clean/chromadb")
+    "data/chromadb"
 )))
 CHROMA_COLLECTION = os.getenv("CHROMA_COLLECTION", "medical_evidence_week1_clean")
 BIOGPT_MODEL_ID   = os.getenv("BIOGPT_MODEL_ID", "microsoft/biogpt")
@@ -118,7 +119,10 @@ def _load_collection():
                 f"ChromaDB not found at {CHROMA_PATH}. "
                 f"Set CHROMA_PATH env var to correct path."
             )
-        client      = chromadb.PersistentClient(path=CHROMA_PATH)
+        client      = chromadb.PersistentClient(
+            path=CHROMA_PATH,
+            settings=Settings(anonymized_telemetry=False),
+        )
         _collection = client.get_collection(name=CHROMA_COLLECTION)
         log.info(f"ChromaDB loaded: {_collection.count()} chunks")
     return _collection
