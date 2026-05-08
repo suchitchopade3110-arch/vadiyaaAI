@@ -208,9 +208,17 @@ def _normalize_source(row: dict[str, Any], default_source: str = "chroma") -> di
 
 class RAGPipeline:
     @with_retry(max_retries=2, backoff_seconds=5.0, fallback=_empty_evidence_fallback)
-    def retrieve_evidence(self, query: str, top_k: int = 5) -> list[dict]:
+    def retrieve_evidence(
+        self,
+        query: str,
+        top_k: int = 5,
+        panel_type: str = "general",
+        report_type: str | None = None,
+        exclude_imaging: bool = False,
+    ) -> list[dict]:
         """Retrieve evidence from the main Chroma KB and domain-specific KBs."""
         results: list[dict] = []
+        is_lab_report = bool(exclude_imaging or str(report_type or "").lower() in {"lab", "urinalysis", "report"})
 
         # Main medical evidence KB from app/rag/retriever.py, when present.
         try:
@@ -223,24 +231,29 @@ class RAGPipeline:
             logger.warning("Main RAG retrieval unavailable: %s", exc)
 
         # Local domain KB helpers include deterministic keyword fallbacks.
-        try:
-            from app.services.ingest_radiology_kb import query_radiology_kb
+        if not is_lab_report:
+            try:
+                from app.services.ingest_radiology_kb import query_radiology_kb
 
-            for row in query_radiology_kb(query, n_results=max(2, top_k // 2)):
-                results.append(_normalize_source(row, "radiology_patterns"))
-        except Exception as exc:
-            logger.debug("Radiology KB retrieval unavailable: %s", exc)
+                for row in query_radiology_kb(query, n_results=max(2, top_k // 2)):
+                    results.append(_normalize_source(row, "radiology_patterns"))
+            except Exception as exc:
+                logger.debug("Radiology KB retrieval unavailable: %s", exc)
 
         try:
             from app.services.ingest_urinalysis_kb import query_urinalysis_kb
 
-            for row in query_urinalysis_kb(query, n_results=max(2, top_k // 2)):
-                results.append(_normalize_source(row, "urinalysis_patterns"))
+            if not is_lab_report or panel_type in {"urinalysis", "comprehensive", "general"}:
+                for row in query_urinalysis_kb(query, n_results=max(2, top_k // 2)):
+                    results.append(_normalize_source(row, "urinalysis_patterns"))
         except Exception as exc:
             logger.debug("Urinalysis KB retrieval unavailable: %s", exc)
 
         # Optional generic collections, useful when ChromaDB runs as a service.
-        for collection_name in ("vaidyaai_rag", "radiology_patterns", "urinalysis_patterns", "chexnet_labels"):
+        collection_names = ["vaidyaai_rag", "urinalysis_patterns"]
+        if not is_lab_report:
+            collection_names.extend(["radiology_patterns", "chexnet_labels"])
+        for collection_name in collection_names:
             collection = _get_collection(collection_name)
             if collection is None:
                 continue
@@ -270,6 +283,9 @@ class RAGPipeline:
                                 "source": metadata.get("source", collection_name),
                                 "title": metadata.get("pattern") or metadata.get("label") or metadata.get("title") or item_id,
                                 "category": metadata.get("category", ""),
+                                "topic": metadata.get("topic", ""),
+                                "source_name": metadata.get("source_name", ""),
+                                "source_file": metadata.get("source_file", ""),
                                 "snippet": text[:240],
                             },
                             collection_name,
@@ -277,6 +293,11 @@ class RAGPipeline:
                     )
             except Exception as exc:
                 logger.warning("ChromaDB query failed for %s: %s", collection_name, exc)
+
+        if is_lab_report:
+            from app.services.rag_panel_filter import filter_report_sources
+
+            results = filter_report_sources(results, panel_type=panel_type, report_type=report_type or "lab")
 
         seen: set[str] = set()
         unique: list[dict] = []

@@ -1,33 +1,96 @@
 {
 
-// claim-verifier.jsx — Claim Verifier page (wired to real API)
+// claim-verifier.jsx — Claim Verifier page
+// Fixed: plain language explanation from correct API field
+// Added: evidence breakdown, claim echo, verdict icon
 
-const { useState, useEffect, useRef } = React;
+const { useState, useRef } = React;
 
 const API_BASE = `${window.location.origin}/api/v1`;
 
 const CLAIM_STEPS = [
-  { label: 'NLP Preprocessing',    desc: 'Tokenization, entity extraction' },
-  { label: 'ClinicalBERT NER',     desc: 'Named entity recognition on medical terms' },
-  { label: 'Evidence Retrieval',   desc: 'Searching PubMed & clinical databases' },
-  { label: 'XGBoost Classification',desc: 'Scoring claim against evidence' },
-  { label: 'SHAP Explanation',     desc: 'Computing feature attribution values' },
-  { label: 'LLM Synthesis',        desc: 'Generating final verdict & reasoning' },
+  { label: 'NLP Preprocessing',     desc: 'Tokenization, entity extraction' },
+  { label: 'ClinicalBERT NER',      desc: 'Named entity recognition on medical terms' },
+  { label: 'Evidence Retrieval',    desc: 'Searching clinical knowledge base' },
+  { label: 'XGBoost Classification', desc: 'Scoring claim against evidence' },
+  { label: 'SHAP Explanation',      desc: 'Computing feature attribution values' },
+  { label: 'LLM Synthesis',         desc: 'Generating final verdict & reasoning' },
 ];
 
+const VERDICT_META = {
+  verified:  { icon: '✓', color: 'oklch(0.46 0.19 145)', bg: 'oklch(0.46 0.19 145 / 0.08)', border: 'oklch(0.46 0.19 145 / 0.3)', label: 'VERIFIED' },
+  refuted:   { icon: '✕', color: 'oklch(0.65 0.20 25)',  bg: 'oklch(0.65 0.20 25 / 0.08)',  border: 'oklch(0.65 0.20 25 / 0.3)',  label: 'REFUTED'  },
+  uncertain: { icon: '?', color: 'oklch(0.75 0.14 60)',  bg: 'oklch(0.75 0.14 60 / 0.08)',  border: 'oklch(0.75 0.14 60 / 0.3)',  label: 'UNCERTAIN'},
+};
+
 function ShapBar({ factor, score }) {
-  const isPos = score >= 0;
+  const safeScore = Number(score || 0);
+  const isPos = safeScore >= 0;
   const color = isPos ? 'oklch(0.46 0.19 145)' : 'oklch(0.65 0.20 25)';
-  const pct = Math.abs(score) * 100;
+  const pct = Math.min(100, Math.abs(safeScore) * 100);
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
-      <div style={{ flex: 1, fontSize: '12px', color: 'var(--text-secondary)', textAlign: 'right', minWidth: '160px' }}>{factor}</div>
-      <div style={{ width: '140px', height: '8px', background: 'var(--bg-elevated)', borderRadius: '4px', overflow: 'hidden' }}>
+      <div style={{ flex: 1, fontSize: '12px', color: 'var(--text-secondary)', textAlign: 'right', minWidth: '140px' }}>{factor}</div>
+      <div style={{ width: '120px', height: '7px', background: 'var(--bg-elevated)', borderRadius: '4px', overflow: 'hidden' }}>
         <div style={{ height: '100%', width: `${pct}%`, background: color, borderRadius: '4px', transition: 'width 0.8s ease' }} />
       </div>
       <div style={{ fontSize: '12px', fontFamily: 'var(--font-mono)', color, width: '42px' }}>
-        {isPos ? '+' : ''}{score.toFixed(2)}
+        {isPos ? '+' : ''}{safeScore.toFixed(2)}
       </div>
+    </div>
+  );
+}
+
+function PlainExplanation({ text, claim, verdict }) {
+  if (!text) return null;
+  const vm = VERDICT_META[verdict] || VERDICT_META.uncertain;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+      <div style={{ padding: '12px 14px', background: 'var(--bg-elevated)', borderRadius: '8px', border: '1px solid var(--border)', borderLeft: '3px solid var(--border)' }}>
+        <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '5px' }}>Claim submitted</div>
+        <div style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.6, fontStyle: 'italic' }}>"{claim}"</div>
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px 14px', background: vm.bg, border: `1px solid ${vm.border}`, borderRadius: '8px' }}>
+        <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: vm.color, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '14px', fontWeight: 900, flexShrink: 0 }}>
+          {vm.icon}
+        </div>
+        <div>
+          <div style={{ fontSize: '11px', fontWeight: 700, color: vm.color, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Verdict: {vm.label}</div>
+          <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>Based on retrieved clinical evidence</div>
+        </div>
+      </div>
+
+      <div style={{ padding: '14px', background: 'var(--bg-elevated)', borderRadius: '8px', border: '1px solid var(--border)', borderLeft: `3px solid ${vm.color}` }}>
+        <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '8px' }}>What this means</div>
+        <div style={{ fontSize: '14px', color: 'var(--text-primary)', lineHeight: 1.75, whiteSpace: 'pre-wrap' }}>{text}</div>
+      </div>
+    </div>
+  );
+}
+
+function EvidenceCard({ citation, index }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={{ border: '1px solid var(--border)', borderRadius: '8px', overflow: 'hidden' }}>
+      <div
+        onClick={() => setOpen(v => !v)}
+        style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '10px', padding: '10px 12px', cursor: 'pointer', background: 'var(--bg-elevated)' }}
+      >
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', flex: 1 }}>
+          <span style={{ fontSize: '10px', fontWeight: 800, color: 'oklch(0.46 0.19 145)', background: 'oklch(0.46 0.19 145 / 0.1)', padding: '2px 6px', borderRadius: '3px', flexShrink: 0, marginTop: '1px' }}>[{index}]</span>
+          <div>
+            <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.4 }}>{citation.title}</div>
+            {citation.source && <div style={{ fontSize: '11px', color: 'oklch(0.46 0.19 145)', marginTop: '2px' }}>{citation.source}</div>}
+          </div>
+        </div>
+        <span style={{ fontSize: '11px', color: 'var(--text-muted)', flexShrink: 0 }}>{open ? '▲' : '▼'}</span>
+      </div>
+      {open && citation.snippet && (
+        <div style={{ padding: '10px 12px', borderTop: '1px solid var(--border)', fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.6, background: 'var(--bg-primary)' }}>
+          {citation.snippet}
+        </div>
+      )}
     </div>
   );
 }
@@ -94,30 +157,60 @@ function ClaimVerifier() {
           const pollRes = await fetch(`${API_BASE}/verify/claim/${claimId}`);
           const data = await pollRes.json();
           
-          if (data.status === 'PROCESSING' || data.status === 'PENDING' || data.status === 'processing' || data.status === 'pending') {
+          const st = (data.status || '').toLowerCase();
+          if (['pending', 'processing', 'progress', 'started'].includes(st)) {
             pollRef.current = setTimeout(poll, 2000);
             return;
           }
 
-          // Done — map to display format
           clearInterval(timerRef.current);
           setStep(CLAIM_STEPS.length);
-          
-          const analysisResult = data.analysis_result || {};
-          const status = (data.status || '').toLowerCase();
-          const displayStatus = status === 'verified' ? 'verified' : status === 'refuted' || status === 'contradicted' ? 'refuted' : 'uncertain';
+
+          const raw = data.result || data;
+          const nested = raw.analysis_result || {};
+          const verdictRaw = (raw.verdict || nested.verdict || raw.status || 'uncertain').toLowerCase();
+          const displayVerdict = verdictRaw.includes('verif') ? 'verified'
+                               : verdictRaw.includes('refut') || verdictRaw.includes('contra') ? 'refuted'
+                               : 'uncertain';
+
+          const explanationText = raw.explanation
+            || raw.rag_explanation
+            || raw.plain_language_summary
+            || raw.explanation_brief
+            || raw.explanation_full
+            || nested.explanation
+            || 'Analysis complete. See evidence sources below for supporting literature.';
+
+          const confidence = raw.confidence_score
+            || raw.confidence
+            || nested.confidence?.score
+            || 50;
+
+          const sources = raw.sources || raw.source_citations || data.sources || [];
+          const shapRaw = raw.shap_top_factors || raw.shap_values || nested.shap_values || {};
+          const shapArr = Array.isArray(shapRaw)
+            ? shapRaw.map(item => ({ factor: item.feature || item.factor || String(item), score: item.shap || item.score || 0 }))
+            : Object.entries(shapRaw).map(([k, v]) => ({ factor: k, score: v }));
+
+          const entities = (raw.extracted_entities?.conditions || raw.entities || nested.entities || [])
+            .map(e => ({ label: e.label || e, type: e.type || 'condition' }));
 
           setResult({
-            status: displayStatus,
-            confidence: data.confidence || analysisResult.confidence?.score || 75,
-            verdict_text: analysisResult.explanation || analysisResult.verdict || 'Analysis complete.',
-            entities: (analysisResult.entities || []).map(e => ({ label: e.label || e, type: e.type || 'finding' })),
-            shap: Object.entries(analysisResult.shap_values || {}).map(([k, v]) => ({ factor: k, score: v })).slice(0, 5),
-            citations: (data.source_citations || data.sources || []).map(c => ({
-              title: c.title || c.source_id || 'Source',
-              source: c.url || c.source || '',
-              snippet: c.excerpt || c.snippet || '',
-            })),
+            verdict: displayVerdict,
+            confidence: Number(confidence) > 1 ? Number(confidence) : Number(confidence) * 100,
+            explanation: explanationText,
+            entities,
+            shap: shapArr.slice(0, 6),
+            citations: sources.map((c, i) => {
+              if (typeof c === 'string') {
+                return { title: c, source: '', snippet: '' };
+              }
+              return {
+                title:   c.title || c.source_id || c.pattern || `Source ${i + 1}`,
+                source:  c.url || c.source || c.source_file || '',
+                snippet: c.snippet || c.excerpt || c.text || '',
+              };
+            }).filter(c => !`${c.title} ${c.source}`.toLowerCase().includes('keyword_fallback')),
           });
           setPhase('done');
         } catch (err) {
@@ -203,7 +296,7 @@ function ClaimVerifier() {
               {jobId || '...'} · {CLAIM_STEPS[Math.min(step, CLAIM_STEPS.length-1)].label}
             </div>
             <div style={{ marginTop: '20px', padding: '14px', background: 'var(--bg-elevated)', borderRadius: '7px', border: '1px solid var(--border)' }}>
-              <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '6px' }}>Claim submitted:</div>
+              <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '6px' }}>Verifying claim:</div>
               <div style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.6, fontStyle: 'italic' }}>"{claim.slice(0, 140)}{claim.length > 140 ? '…' : ''}"</div>
             </div>
             <div style={{ marginTop: '16px' }}>
@@ -216,39 +309,48 @@ function ClaimVerifier() {
       {phase === 'done' && result && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <Card>
-            <ResultHeader status={result.status} jobId={jobId} elapsed={elapsed} />
-            <div style={{ marginTop: '16px', fontSize: '14px', color: 'var(--text-secondary)', lineHeight: 1.7, padding: '14px', background: 'var(--bg-elevated)', borderRadius: '7px', border: '1px solid var(--border)' }}>
-              {result.verdict_text}
+            <ResultHeader status={result.verdict} jobId={jobId} elapsed={elapsed} />
+            <div style={{ marginTop: '16px' }}>
+              <PlainExplanation
+                text={result.explanation}
+                claim={claim}
+                verdict={result.verdict}
+              />
             </div>
             <div style={{ marginTop: '16px' }}>
               <ConfidenceMeter value={result.confidence} label="Verdict Confidence" />
             </div>
           </Card>
 
-          <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
-            {result.entities.length > 0 && (
-              <Card style={{ flex: 1, minWidth: '260px' }}>
-                <SectionLabel>Extracted Entities</SectionLabel>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                  {result.entities?.map((e, i) => <EntityChip key={i} label={e.label} type={e.type} />)}
-                </div>
-              </Card>
-            )}
-            {result.shap.length > 0 && (
-              <Card style={{ flex: 1, minWidth: '260px' }}>
-                <SectionLabel>SHAP Feature Attribution</SectionLabel>
-                {result.shap?.map((s, i) => <ShapBar key={i} factor={s.factor} score={s.score} />)}
-              </Card>
-            )}
-          </div>
+          {(result.entities.length > 0 || result.shap.length > 0) && (
+            <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
+              {result.entities.length > 0 && (
+                <Card style={{ flex: 1, minWidth: '240px' }}>
+                  <SectionLabel>Extracted Medical Entities</SectionLabel>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                    {result.entities.map((e, i) => <EntityChip key={i} label={e.label} type={e.type} />)}
+                  </div>
+                </Card>
+              )}
+              {result.shap.length > 0 && (
+                <Card style={{ flex: 1, minWidth: '240px' }}>
+                  <SectionLabel>SHAP Feature Attribution</SectionLabel>
+                  {result.shap.map((s, i) => <ShapBar key={i} factor={s.factor} score={s.score} />)}
+                </Card>
+              )}
+            </div>
+          )}
 
           {result.citations.length > 0 && (
             <Card>
-              <CitationList citations={result.citations} />
+              <SectionLabel>Evidence Sources ({result.citations.length})</SectionLabel>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '4px' }}>
+                {result.citations.map((c, i) => <EvidenceCard key={i} citation={c} index={i + 1} />)}
+              </div>
             </Card>
           )}
 
-          {result.status === 'uncertain' && (
+          {result.verdict === 'uncertain' && (
             <UncertaintyBanner message="Confidence below threshold. Results should be interpreted with clinical judgment." />
           )}
           <MedicalDisclaimer />

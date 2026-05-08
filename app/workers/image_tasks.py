@@ -13,6 +13,7 @@ from app.core.config import settings
 from app.core.disclaimer import MEDICAL_DISCLAIMER
 from app.ml.ml_prediction_engine import to_json_safe
 from app.pipeline import run_image_pipeline
+from app.services.fix_image_analysis import build_classification_findings, get_severity, get_severity_color
 from app.workers.celery_app import celery_app
 from app.workers.db_persist import mark_failed, persist_image_analysis
 
@@ -58,6 +59,16 @@ def analyze_image(self, analysis_id: str, file_path: str, image_type: str, file_
         confidence = payload.get("confidence_score") or classification.get("confidence") or 0.0
         if confidence and confidence <= 1:
             confidence = round(confidence * 100, 2)
+        severity = get_severity(confidence)
+        probability_rows = [
+            {
+                "label": key,
+                "classification_prob": value,
+                "detection_confidence": value,
+                "clinical_meaning": "",
+            }
+            for key, value in (classification.get("probabilities") or {}).items()
+        ]
 
         self.update_state(state="PROGRESS", meta={"step": "persist", "pct": 95})
         result = {
@@ -67,8 +78,8 @@ def analyze_image(self, analysis_id: str, file_path: str, image_type: str, file_
             "dicom_metadata": {},
             "segmentation": {
                 "mask_path": None,
-                "overlay_path": payload.get("segmentation_overlay_path"),
-                "roi_bounding_box": segmentation.get("bbox") or {},
+                "overlay_path": payload.get("yolo_annotated_path") or payload.get("segmentation_overlay_path"),
+                "roi_bounding_box": payload.get("yolo_detections") or segmentation.get("bbox") or {},
                 "confidence": segmentation.get("confidence", 0.0),
                 "num_contours": segmentation.get("num_contours", 0),
                 "mask_pixels": segmentation.get("mask_pixels", 0),
@@ -77,7 +88,14 @@ def analyze_image(self, analysis_id: str, file_path: str, image_type: str, file_
                 "label": label,
                 "top_class": label,
                 "top_confidence": confidence,
+                "classification_prob": classification.get("classification_prob", confidence),
+                "detection_confidence": classification.get("detection_confidence", confidence),
+                "label_classification": "Class probability",
+                "label_detection": "Detection confidence",
+                "severity": severity,
+                "severity_color": get_severity_color(severity),
                 "probabilities": classification.get("probabilities", {}),
+                "findings": build_classification_findings(probability_rows),
                 "primary_finding": classification.get("primary_finding"),
                 "icd10_code": (payload.get("label_metadata") or {}).get("icd10"),
                 "urgency": (payload.get("label_metadata") or {}).get("urgency"),
@@ -87,6 +105,15 @@ def analyze_image(self, analysis_id: str, file_path: str, image_type: str, file_
                 "heatmap_path": payload.get("gradcam_path"),
                 "top_regions": (payload.get("who_structured_report") or {}).get("gradcam_regions", []),
             },
+            "yolo": {
+                "detections": payload.get("yolo_detections") or [],
+                "annotated_path": payload.get("yolo_annotated_path"),
+                "model_used": payload.get("yolo_model_used"),
+                "roi_bbox": payload.get("yolo_roi_bbox") or [],
+            },
+            "yolo_detections": payload.get("yolo_detections") or [],
+            "yolo_annotated_path": payload.get("yolo_annotated_path"),
+            "yolo_model_used": payload.get("yolo_model_used"),
             "sources": payload.get("sources") or payload.get("radiology_evidence") or [],
             "radiology_evidence": payload.get("radiology_evidence", []),
             "who_report": payload.get("who_structured_report"),

@@ -160,3 +160,8 @@ if os.path.isdir(_FRONTEND_DIR):
     app.mount("/ui", StaticFiles(directory=_FRONTEND_DIR, html=True), name="ui")
 else:
     log.warning(f"Frontend directory not found at {_FRONTEND_DIR} — /ui not mounted")
+
+_YOLO_OUTPUT_DIR = os.path.join(os.getcwd(), "data", "yolo_outputs")
+os.makedirs(_YOLO_OUTPUT_DIR, exist_ok=True)
+if os.path.isdir(_YOLO_OUTPUT_DIR):
+    app.mount("/yolo_outputs", StaticFiles(directory=_YOLO_OUTPUT_DIR), name="yolo_outputs")

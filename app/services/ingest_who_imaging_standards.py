@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import os
 import re
+import sqlite3
 from pathlib import Path
 from typing import Any
 
@@ -14,7 +15,7 @@ COLLECTION = os.getenv("CHROMA_COLLECTION", "medical_evidence_week1_clean")
 CHUNK_SIZE = int(os.getenv("RAG_CHUNK_SIZE", "500"))
 CHUNK_OVERLAP = int(os.getenv("RAG_CHUNK_OVERLAP", "100"))
 UPLOAD_BATCH = int(os.getenv("RAG_UPLOAD_BATCH_SIZE", "32"))
-EMBED_DIMENSIONS = int(os.getenv("RAG_EMBED_DIMENSIONS", "1024"))
+EMBED_DIMENSIONS = int(os.getenv("RAG_EMBED_DIMENSIONS", "96"))
 
 SOURCE_META = {
     "source_name": "WHO Diagnostic Imaging Standards",
@@ -215,6 +216,22 @@ def _embed(text: str, dimensions: int = EMBED_DIMENSIONS) -> list[float]:
     return [value / norm for value in vector]
 
 
+def _collection_embedding_dimensions(default: int = EMBED_DIMENSIONS) -> int:
+    sqlite_path = CHROMA_PATH / "chroma.sqlite3"
+    if not sqlite_path.exists():
+        return default
+    try:
+        with sqlite3.connect(sqlite_path) as conn:
+            row = conn.execute(
+                "SELECT vector FROM embeddings_queue WHERE vector IS NOT NULL LIMIT 1"
+            ).fetchone()
+        if row and row[0]:
+            return len(row[0]) // 4
+    except Exception:
+        pass
+    return default
+
+
 def chunk_text(text: str, size: int = CHUNK_SIZE, overlap: int = CHUNK_OVERLAP) -> list[str]:
     words = text.split()
     chunks: list[str] = []
@@ -281,7 +298,7 @@ def _collection():
                 return chroma_hnsw.PersistentData(
                     dimensionality=dimensionality,
                     total_elements_added=data.get("total_elements_added", 0),
-                    max_seq_id=data.get("max_seq_id"),
+                    max_seq_id=data.get("max_seq_id") or 0,
                     id_to_label=data.get("id_to_label", {}),
                     label_to_id=data.get("label_to_id", {}),
                     id_to_seq_id=data.get("id_to_seq_id", {}),
@@ -303,6 +320,7 @@ def _collection():
 
 def ingest_who_standards() -> int:
     collection = _collection()
+    dimensions = _collection_embedding_dimensions()
     corpus = build_corpus()
     existing_ids = set(collection.get(include=[])["ids"])
     pending = [row for row in corpus if row["chunk_id"] not in existing_ids]
@@ -317,7 +335,7 @@ def ingest_who_standards() -> int:
         texts = [row["text"] for row in batch]
         collection.upsert(
             ids=[row["chunk_id"] for row in batch],
-            embeddings=[_embed(text) for text in texts],
+            embeddings=[_embed(text, dimensions) for text in texts],
             documents=texts,
             metadatas=[{key: value for key, value in row.items() if key not in {"chunk_id", "text"}} for row in batch],
         )

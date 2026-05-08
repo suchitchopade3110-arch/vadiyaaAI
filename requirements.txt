@@ -28,8 +28,8 @@ aiofiles==23.2.1
 httpx==0.27.0
 
 # ── Image Processing (Phase 1: basic; Phase 2: full pipeline) ─────────────────
-Pillow==10.3.0
-opencv-python-headless==4.9.0.80
+Pillow==12.2.0
+opencv-python-headless==4.10.0.84
 pydicom==2.4.4                   # DICOM parsing
 
 # ── OCR ───────────────────────────────────────────────────────────────────────
@@ -63,6 +63,8 @@ posthog<4                        # ChromaDB 0.5 telemetry API compatibility
 # ── Explainability (Phase 2) ──────────────────────────────────────────────────
 shap==0.45.1
 grad-cam==1.4.8                # For image heatmaps
+ultralytics==8.4.47            # Optional YOLO image detections
+roboflow==1.3.8                # Optional chest X-ray YOLO model download
 
 # ── OpenAI (Phase 2: LLM reasoning) ──────────────────────────────────────────
 openai==1.30.1

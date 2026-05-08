@@ -11,7 +11,7 @@ import os
 import time
 import traceback
 import uuid
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass, is_dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -49,6 +49,15 @@ from clinical_reference import analyze_blood_report, enrich_lab_with_who_ranges,
 
 logger = logging.getLogger("vaidya.pipeline")
 
+try:
+    from app.services.modality_classifier import CHEST_MODALITIES, classify_by_modality
+
+    MODALITY_ROUTER_AVAILABLE = True
+except Exception as exc:  # pragma: no cover - optional service fallback
+    CHEST_MODALITIES = {"xray", "x-ray", "x_ray", "chest", "cxr"}
+    MODALITY_ROUTER_AVAILABLE = False
+    logger.warning("Modality router unavailable: %s", exc)
+
 
 # ============================================================================
 # CONFIGURATION
@@ -80,6 +89,10 @@ class PipelineResponse(BaseModel):
     tabular_prediction: Optional[Dict[str, Any]] = None
     ensemble_details: Optional[Dict[str, Any]] = None
     image_classification: Optional[Dict[str, Any]] = None
+    yolo_detections: List[Dict[str, Any]] = Field(default_factory=list)
+    yolo_annotated_path: Optional[str] = None
+    yolo_model_used: Optional[str] = None
+    yolo_roi_bbox: List[int] = Field(default_factory=list)
     label_metadata: Optional[Dict[str, Any]] = None
     radiology_evidence: List[Dict[str, Any]] = Field(default_factory=list)
     who_structured_report: Optional[Dict[str, Any]] = None
@@ -90,6 +103,7 @@ class PipelineResponse(BaseModel):
     extracted_entities: Optional[Dict[str, Any]] = None
     lab_values: List[Dict[str, Any]] = Field(default_factory=list)
     anomalies: List[Dict[str, Any]] = Field(default_factory=list)
+    panel_type: Optional[str] = None
 
     verdict: Optional[str] = None
     risk_score: Optional[float] = None
@@ -271,6 +285,25 @@ def _extract_lab_values_safe(raw_text: str, ner_result: Any, report_type: str) -
         return values
 
 
+def _parse_column_lab_report_safe(file_path: str, report_type: str) -> Dict[str, Any]:
+    if report_type != "lab" or Path(file_path).suffix.lower() != ".pdf":
+        return {}
+    try:
+        from app.services.lab_report_column_parser import parse_lab_report_for_pipeline
+
+        parsed = parse_lab_report_for_pipeline(file_path)
+        if parsed.get("lab_values"):
+            logger.info(
+                "Column-aware lab parser extracted %s rows; panel=%s",
+                len(parsed["lab_values"]),
+                parsed.get("panel_type"),
+            )
+            return parsed
+    except Exception as exc:
+        logger.warning("Column-aware lab parser skipped: %s", exc)
+    return {}
+
+
 def _run_segmentation_safe(image_array: Any, ctx: PipelineContext):
     try:
         from app.services.segmentation.pipeline_runner import pipeline as run_segmentation
@@ -298,6 +331,7 @@ def _explain_report_safe(
     risk_factors: List[Dict[str, Any]],
     anomalies: List[Dict[str, Any]],
     report_type: str,
+    panel_type: str = "general",
 ) -> Dict[str, Any]:
     rag = _rag_service()
     if rag is None:
@@ -311,7 +345,20 @@ def _explain_report_safe(
             "hallucination_flagged": False,
         }
     try:
-        sources = rag.retrieve_evidence(raw_text[:500])
+        if anomalies:
+            query_terms = " ".join(
+                str(item.get("field") or item.get("test") or item.get("name") or "")
+                for item in anomalies[:8]
+            )
+            query = f"{panel_type} {report_type} lab findings {query_terms}".strip()
+        else:
+            query = f"{panel_type} {report_type} lab report {raw_text[:300]}".strip()
+        sources = rag.retrieve_evidence(
+            query,
+            panel_type=panel_type,
+            report_type=report_type,
+            exclude_imaging=(report_type == "lab"),
+        )
         explanation = rag.explain_report(
             entities=entities,
             risk_score=risk_score,
@@ -391,6 +438,7 @@ def _lab_value_to_row(lab_value: Any, gender: str = "male", age: int = 40) -> Di
     ref_low = getattr(lab_value, "ref_low", None)
     ref_high = getattr(lab_value, "ref_high", None)
     reference = getattr(lab_value, "reference", None)
+    flag = getattr(lab_value, "flag", "NORMAL")
     if isinstance(lab_value, dict):
         name = lab_value.get("name") or lab_value.get("test")
         value = lab_value.get("value") if lab_value.get("value") is not None else lab_value.get("result")
@@ -398,6 +446,7 @@ def _lab_value_to_row(lab_value: Any, gender: str = "male", age: int = 40) -> Di
         ref_low = lab_value.get("ref_low")
         ref_high = lab_value.get("ref_high")
         reference = lab_value.get("reference") or lab_value.get("reference_range")
+        flag = lab_value.get("flag", "NORMAL")
 
     if name:
         name = clean_test_name(str(name))
@@ -420,7 +469,7 @@ def _lab_value_to_row(lab_value: Any, gender: str = "male", age: int = 40) -> Di
         "result": value,
         "unit": unit,
         "reference": reference or "--",
-        "flag": "NORMAL",
+        "flag": flag or "NORMAL",
         "ref_low": ref_low,
         "ref_high": ref_high,
     }
@@ -601,6 +650,31 @@ def run_image_pipeline(
 
         from PIL import Image
 
+        yolo_result: Dict[str, Any] = {
+            "detections": [],
+            "annotated_path": None,
+            "model_used": "none",
+            "roi_bbox": [],
+            "primary_finding": None,
+            "yolo_confidence": 0.0,
+        }
+        yolo_regions: List[str] = []
+        if ext != ".dcm":
+            try:
+                from app.services.yolo_detector import detect_lung_disease, get_yolo_gradcam_regions
+
+                yolo_result = detect_lung_disease(image_path, job_id=ctx.job_id)
+                height, width = primary_image_array.shape[:2]
+                yolo_regions = get_yolo_gradcam_regions(yolo_result, width, height)
+                logger.info(
+                    "[%s] YOLO model=%s detections=%s",
+                    ctx.job_id,
+                    yolo_result.get("model_used"),
+                    len(yolo_result.get("detections") or []),
+                )
+            except Exception as exc:
+                logger.warning("[%s] YOLO detector skipped: %s", ctx.job_id, exc)
+
         segmentation = None
         roi_pil = None
         seg = _run_segmentation_safe(primary_image_array, ctx)
@@ -617,30 +691,89 @@ def run_image_pipeline(
             if roi_crop is not None and getattr(roi_crop, "size", 0):
                 roi_pil = Image.fromarray(roi_crop).convert("RGB")
 
+        if roi_pil is None and yolo_result.get("roi_bbox"):
+            try:
+                x1, y1, x2, y2 = [int(value) for value in yolo_result["roi_bbox"][:4]]
+                height, width = primary_image_array.shape[:2]
+                x1, x2 = max(0, x1), min(width, x2)
+                y1, y2 = max(0, y1), min(height, y2)
+                if x2 > x1 and y2 > y1:
+                    roi_pil = Image.fromarray(primary_image_array[y1:y2, x1:x2]).convert("RGB")
+                    segmentation = segmentation or {}
+                    segmentation["bbox"] = [x1, y1, x2, y2]
+                    segmentation["source"] = "yolo_coco_fallback"
+            except Exception as exc:
+                logger.warning("[%s] YOLO ROI crop failed: %s", ctx.job_id, exc)
+
         if roi_pil is None:
             roi_pil = Image.fromarray(primary_image_array).convert("RGB")
 
-        classification = classify_image(roi_pil)
+        normalized_image_type = str(image_type or "xray").lower().strip()
+        is_chest_modality = normalized_image_type in CHEST_MODALITIES
+
+        if MODALITY_ROUTER_AVAILABLE:
+            classification = classify_by_modality(
+                image_path=image_path,
+                modality=normalized_image_type,
+                fallback_classify_fn=classify_image,
+                fallback_image=roi_pil,
+            )
+        else:
+            classification = classify_image(roi_pil)
+
+        if is_dataclass(classification):
+            classification_json = to_json_safe(asdict(classification))
+        else:
+            classification_json = to_json_safe(classification)
+
         gradcam_path = None
-        try:
-            gradcam_path = generate_gradcam_overlay(roi_pil, job_id=ctx.job_id)["gradcam_path"]
-            classification.gradcam_path = gradcam_path
-        except Exception as exc:
-            logger.warning("[%s] GradCAM failed: %s", ctx.job_id, exc)
+        if is_chest_modality:
+            try:
+                gradcam_path = generate_gradcam_overlay(roi_pil, job_id=ctx.job_id)["gradcam_path"]
+                if hasattr(classification, "gradcam_path"):
+                    classification.gradcam_path = gradcam_path
+                if isinstance(classification_json, dict):
+                    classification_json["gradcam_path"] = gradcam_path
+            except Exception as exc:
+                logger.warning("[%s] GradCAM failed: %s", ctx.job_id, exc)
 
         rag = _rag_service()
+        from app.services.fix_image_analysis import (
+            filter_keyword_fallback_sources,
+            get_severity,
+            get_severity_color,
+            retrieve_image_evidence_from_main_kb,
+        )
+
         explanation = (
             f"Image classified as {classification.label} with "
             f"{classification.confidence:.2%} confidence."
         )
         sources = []
         uncertainty_flag = classification.confidence < 0.6
+        gradcam_regions = []
+        if segmentation and segmentation.get("bbox"):
+            gradcam_regions.append(f"ROI bbox {segmentation['bbox']}")
+        gradcam_regions.extend(yolo_regions)
+        try:
+            sources = retrieve_image_evidence_from_main_kb(
+                classification.label,
+                gradcam_regions=gradcam_regions,
+                top_k=5,
+            )
+        except Exception as exc:
+            logger.warning("[%s] Main WHO image retrieval fallback: %s", ctx.job_id, exc)
         if rag is not None:
             try:
-                sources = rag.retrieve_evidence(f"{image_type} {classification.label} {clinical_context}".strip())
+                if len(sources) < 2:
+                    fallback_sources = rag.retrieve_evidence(
+                        f"{image_type} {classification.label} {clinical_context}".strip(),
+                        report_type="image",
+                    )
+                    sources = filter_keyword_fallback_sources((sources or []) + (fallback_sources or []))
                 explanation = rag.explain_image(
                     image_type=image_type,
-                    classification=to_json_safe(classification),
+                    classification=classification_json,
                     segmentation=segmentation or {},
                     sources=sources,
                 )
@@ -657,6 +790,7 @@ def run_image_pipeline(
                 confidence=classification.confidence,
                 segmentation=segmentation or {},
                 patient_id=ctx.patient_id,
+                gradcam_regions=gradcam_regions,
             )
             structured = who_outputs.get("structured_explanation") or {}
             explanation = structured.get("clinical_interpretation") or explanation
@@ -664,22 +798,40 @@ def run_image_pipeline(
         except Exception as exc:
             logger.warning("[%s] WHO image enrichment fallback: %s", ctx.job_id, exc)
 
-        evidence_sources = who_outputs.get("radiology_evidence") or []
+        evidence_sources = filter_keyword_fallback_sources((who_outputs.get("radiology_evidence") or []) + (sources or []))
+        confidence_value = float(getattr(classification, "confidence", 0.0) or 0.0)
+        confidence_pct = round(confidence_value * 100 if confidence_value <= 1 else confidence_value, 2)
+        severity = get_severity(confidence_pct)
+        classification_payload = dict(classification_json) if isinstance(classification_json, dict) else {}
+        classification_payload.update(
+            {
+                "classification_prob": confidence_pct,
+                "detection_confidence": confidence_pct,
+                "label_classification": "Class probability",
+                "label_detection": "Detection confidence",
+                "severity": severity,
+                "severity_color": get_severity_color(severity),
+            }
+        )
         return PipelineResponse(
             job_id=ctx.job_id,
             patient_id=ctx.patient_id,
             pipeline_type="image",
             status="completed",
-            image_classification=to_json_safe(classification),
+            image_classification=classification_payload,
+            yolo_detections=to_json_safe(yolo_result.get("detections") or []),
+            yolo_annotated_path=yolo_result.get("annotated_path"),
+            yolo_model_used=yolo_result.get("model_used"),
+            yolo_roi_bbox=list(yolo_result.get("roi_bbox") or []),
             label_metadata=who_outputs.get("label_metadata"),
             radiology_evidence=evidence_sources,
             who_structured_report=who_outputs.get("who_structured_report"),
             segmentation=segmentation,
             verdict=(who_outputs.get("structured_explanation") or {}).get("verdict", "Uncertain"),
-            risk_score=round(classification.confidence * 100, 2),
-            risk_label=_confidence_label(classification.confidence * 100),
-            confidence_score=round(classification.confidence * 100, 2),
-            confidence_label=_confidence_label(classification.confidence * 100),
+            risk_score=confidence_pct,
+            risk_label=severity,
+            confidence_score=confidence_pct,
+            confidence_label=severity,
             explanation=explanation,
             plain_language_summary=(who_outputs.get("structured_explanation") or {}).get("patient_friendly_summary", explanation),
             sources=evidence_sources or sources,
@@ -717,18 +869,20 @@ def run_report_pipeline(
 
         ocr_result = _run_ocr_safe(file_path)
         raw_text = getattr(ocr_result, "raw_text", "") or ""
+        parsed_lab_report = _parse_column_lab_report_safe(file_path, report_type)
+        panel_type = str(parsed_lab_report.get("panel_type") or "general")
         urine_result = None
         try:
             from app.services.clinical_ner_service import detect_report_type, run_clinical_pipeline
 
-            if detect_report_type(raw_text) == "urinalysis":
+            if not parsed_lab_report and detect_report_type(raw_text) == "urinalysis":
                 urine_result = run_clinical_pipeline(raw_text)
         except Exception as exc:
             logger.warning("[%s] Urinalysis NER enrichment skipped: %s", ctx.job_id, exc)
         ner_result = _NerResult(conditions=[], medications=[], dates=[], lab_values=[]) if urine_result else _run_ner_safe(raw_text)
 
-        lab_values = _extract_lab_values_safe(raw_text, ner_result, report_type)
-        if report_type == "lab":
+        lab_values = parsed_lab_report.get("lab_values") or _extract_lab_values_safe(raw_text, ner_result, report_type)
+        if report_type == "lab" and not parsed_lab_report:
             lab_values = enrich_lab_with_who_ranges(lab_values, gender=gender)
         lab_rows = [_lab_value_to_row(value) for value in lab_values]
         lab_dict = _lab_values_to_dict(lab_values, gender=gender, age=age)
@@ -742,6 +896,7 @@ def run_report_pipeline(
         risk_score = 50.0
         risk_factors = []
         if urine_result:
+            panel_type = "urinalysis"
             entities = urine_result.get("entities") or {}
             entities["_source"] = urine_result.get("model_used")
             lab_rows = _urine_entities_to_rows(entities)
@@ -910,6 +1065,7 @@ def run_report_pipeline(
             risk_factors=risk_factors,
             anomalies=anomalies,
             report_type=report_type,
+            panel_type=panel_type,
         )
 
         patient_history: List[Dict[str, Any]] = []
@@ -946,6 +1102,7 @@ def run_report_pipeline(
             extracted_entities=entities,
             lab_values=lab_rows,
             anomalies=anomalies,
+            panel_type=panel_type,
             verdict=rag_result["verdict"],
             risk_score=risk_score,
             risk_label=risk_label or confidence_label,

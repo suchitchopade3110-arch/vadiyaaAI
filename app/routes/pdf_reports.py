@@ -45,7 +45,7 @@ async def download_pdf_report(job_id: str):
 
     job_result = result.result or {}
     report_data = {
-        "report_type": job_result.get("report_type", "lab"),
+        "report_type": job_result.get("report_type") or job_result.get("pipeline_type") or job_result.get("image_type") or "lab",
         "patient_id": job_result.get("patient_id", "Anonymous"),
         "risk_score": job_result.get("risk_score", 0),
         "risk_label": job_result.get("risk_label", "unknown"),
@@ -55,9 +55,15 @@ async def download_pdf_report(job_id: str):
         ),
         "lab_values": job_result.get("lab_values", []),
         "anomalies": job_result.get("anomalies", []),
+        "classification": job_result.get("classification") or job_result.get("image_classification") or {},
+        "findings": job_result.get("findings") or (job_result.get("classification") or {}).get("findings") or [],
+        "gradcam_path": job_result.get("gradcam_path") or (job_result.get("gradcam") or {}).get("heatmap_path"),
+        "gradcam": job_result.get("gradcam") or {},
         "shap_factors": job_result.get("shap_values", {}),
         "explanation": job_result.get("explanation", ""),
+        "sources": job_result.get("sources", []) or job_result.get("radiology_evidence", []),
         "citations": job_result.get("sources", []),
+        "radiology_evidence": job_result.get("radiology_evidence", []),
         "uncertainty_flag": job_result.get("uncertainty_flag", False),
         "generated_at": job_result.get("completed_at", ""),
     }
@@ -72,4 +78,3 @@ async def download_pdf_report(job_id: str):
             "X-Medical-Disclaimer": MEDICAL_DISCLAIMER,
         },
     )
-

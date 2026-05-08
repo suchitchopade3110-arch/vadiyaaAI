@@ -22,6 +22,7 @@ import logging
 import os
 import re
 import sqlite3
+import hashlib
 from datetime import timezone, datetime
 UTC = timezone.utc
 from pathlib import Path
@@ -60,7 +61,7 @@ try:
             return chroma_hnsw.PersistentData(
                 dimensionality=dimensionality,
                 total_elements_added=data.get("total_elements_added", 0),
-                max_seq_id=data.get("max_seq_id"),
+                max_seq_id=data.get("max_seq_id") or 0,
                 id_to_label=data.get("id_to_label", {}),
                 label_to_id=data.get("label_to_id", {}),
                 id_to_seq_id=data.get("id_to_seq_id", {}),
@@ -81,6 +82,7 @@ CHROMA_PATH = os.path.abspath(os.path.expanduser(os.getenv(
 )))
 CHROMA_COLLECTION = os.getenv("CHROMA_COLLECTION", "medical_evidence_week1_clean")
 BIOGPT_MODEL_ID   = os.getenv("BIOGPT_MODEL_ID", "microsoft/biogpt")
+BIOGPT_LOCAL_ONLY = os.getenv("BIOGPT_LOCAL_ONLY", "true").lower() not in {"0", "false", "no"}
 
 TOP_K_DEFAULT     = int(os.getenv("RAG_TOP_K", 5))
 EMBED_BATCH_SIZE  = int(os.getenv("RAG_EMBED_BATCH_SIZE", 8))
@@ -91,6 +93,7 @@ _tokenizer  = None
 _model      = None
 _collection = None
 _device     = None
+_embedding_fallback = False
 
 
 def _get_device() -> str:
@@ -101,12 +104,31 @@ def _get_device() -> str:
 
 
 def _load_biogpt():
-    global _tokenizer, _model
+    global _tokenizer, _model, _embedding_fallback
+    if _embedding_fallback:
+        raise RuntimeError("BioGPT unavailable; using hash embedding fallback")
     if _tokenizer is None or _model is None:
         log.info(f"Loading BioGPT from {BIOGPT_MODEL_ID} on {_get_device()}")
-        _tokenizer = BioGptTokenizer.from_pretrained(BIOGPT_MODEL_ID)
-        _model     = BioGptModel.from_pretrained(BIOGPT_MODEL_ID).to(_get_device())
-        _model.eval()
+        if BIOGPT_LOCAL_ONLY:
+            os.environ.setdefault("HF_HUB_OFFLINE", "1")
+            os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
+            if not Path(BIOGPT_MODEL_ID).exists():
+                _embedding_fallback = True
+                raise RuntimeError(
+                    "BIOGPT_LOCAL_ONLY=true and BIOGPT_MODEL_ID is not a local model path"
+                )
+        try:
+            _tokenizer = BioGptTokenizer.from_pretrained(BIOGPT_MODEL_ID, local_files_only=BIOGPT_LOCAL_ONLY)
+            _model     = BioGptModel.from_pretrained(
+                BIOGPT_MODEL_ID,
+                local_files_only=BIOGPT_LOCAL_ONLY,
+                use_safetensors=False,
+            ).to(_get_device())
+            _model.eval()
+        except Exception as exc:
+            _embedding_fallback = True
+            log.warning("BioGPT unavailable locally, using hash embedding fallback: %s", exc)
+            raise
         log.info("BioGPT loaded OK")
     return _tokenizer, _model
 
@@ -129,9 +151,26 @@ def _load_collection():
 
 
 # ── Embedding ─────────────────────────────────────────────────────────────────
+def _hash_embed_text(text: str, dimensions: int = 1024) -> list[float]:
+    vector = [0.0] * dimensions
+    for token in re.split(r"[^a-z0-9]+", str(text).lower()):
+        if len(token) <= 2:
+            continue
+        digest = hashlib.sha256(token.encode("utf-8")).digest()
+        index = int.from_bytes(digest[:4], "big") % dimensions
+        sign = 1.0 if digest[4] % 2 == 0 else -1.0
+        vector[index] += sign
+    norm = sum(value * value for value in vector) ** 0.5 or 1.0
+    return [value / norm for value in vector]
+
+
 def embed_texts(texts: list[str], batch_size: int = EMBED_BATCH_SIZE) -> list[list[float]]:
     """BioGPT mean-pool embeddings. ENCODER ONLY — never generates text."""
-    tokenizer, model = _load_biogpt()
+    try:
+        tokenizer, model = _load_biogpt()
+    except Exception:
+        dimensions = int(os.getenv("RAG_EMBED_DIMENSIONS", "1024"))
+        return [_hash_embed_text(text, dimensions=dimensions) for text in texts]
     device = _get_device()
     all_embeddings = []
 
@@ -259,9 +298,12 @@ def retrieve_evidence(query: str, top_k: int = TOP_K_DEFAULT) -> dict:
             "id":              doc_id,
             "text":            text,
             "source":          meta.get("source_name", ""),
+            "source_name":     meta.get("source_name", ""),
             "source_file":     meta.get("source_file", ""),
             "title":           meta.get("title", ""),
             "url":             meta.get("url", ""),
+            "topic":           meta.get("topic", ""),
+            "condition":       meta.get("condition", ""),
             "section_heading": meta.get("section_heading", ""),
             "page_number":     meta.get("page_number", ""),
             "chunk_index":     meta.get("chunk_index", ""),

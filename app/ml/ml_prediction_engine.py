@@ -618,17 +618,23 @@ def get_scaler():
 
 @lru_cache(maxsize=1)
 def get_shap_explainer():
-    """SHAP TreeExplainer, regenerated from XGBoost if the v2 pickle is missing."""
+    """SHAP TreeExplainer, regenerated and cached when pickle is missing or incompatible."""
     joblib = _require("joblib", "pip install joblib")
     shap = _require("shap", "pip install shap")
 
     if Config.SHAP_EXPLAINER_PATH.exists():
-        return joblib.load(Config.SHAP_EXPLAINER_PATH)
+        try:
+            return joblib.load(Config.SHAP_EXPLAINER_PATH)
+        except Exception as exc:
+            logger.warning("SHAP explainer cache incompatible, regenerating: %s", exc)
     if Config.LEGACY_SHAP_EXPLAINER_PATH.exists():
-        logger.warning("Using legacy SHAP explainer: %s", Config.LEGACY_SHAP_EXPLAINER_PATH)
-        return joblib.load(Config.LEGACY_SHAP_EXPLAINER_PATH)
+        try:
+            logger.info("Using legacy SHAP explainer: %s", Config.LEGACY_SHAP_EXPLAINER_PATH)
+            return joblib.load(Config.LEGACY_SHAP_EXPLAINER_PATH)
+        except Exception as exc:
+            logger.warning("Legacy SHAP explainer incompatible, regenerating: %s", exc)
 
-    logger.warning("SHAP explainer not found, regenerating: %s", Config.SHAP_EXPLAINER_PATH)
+    logger.info("Regenerating SHAP explainer: %s", Config.SHAP_EXPLAINER_PATH)
     model = get_xgb_model()
     base_model = (
         model.calibrated_classifiers_[0].estimator

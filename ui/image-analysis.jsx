@@ -13,6 +13,15 @@ const IMAGE_STEPS = [
   { label: 'LLM Explanation',    desc: 'Radiological narrative generation' },
 ];
 
+function assetUrl(path) {
+  if (!path) return '';
+  const value = String(path);
+  if (value.startsWith('http') || value.startsWith('data:') || value.startsWith('/')) return value;
+  if (value.startsWith('data/yolo_outputs/')) return `${window.location.origin}/yolo_outputs/${value.split('/').pop()}`;
+  if (value.includes('/data/yolo_outputs/')) return `${window.location.origin}/yolo_outputs/${value.split('/').pop()}`;
+  return `${window.location.origin}/${value.replace(/^\/+/, '')}`;
+}
+
 const MOCK_XRAY_RESULT = {
   status: 'verified',
   type: 'xray',
@@ -681,6 +690,42 @@ function FindingRow({ finding }) {
   );
 }
 
+function YoloDetectionPanel({ result }) {
+  const yolo = result?.yolo || {};
+  const detections = result?.yolo_detections || yolo.detections || [];
+  const annotated = assetUrl(result?.yolo_annotated_path || yolo.annotated_path || result?.segmentation?.yolo_overlay_url);
+  if (!annotated && !detections.length) return null;
+
+  return (
+    <Card>
+      <SectionLabel>YOLO Detection Overlay</SectionLabel>
+      {annotated && (
+        <div style={{ border: '1px solid var(--border)', borderRadius: '8px', overflow: 'hidden', background: 'var(--bg-elevated)' }}>
+          <img src={annotated} alt="YOLO annotated detection overlay" style={{ width: '100%', display: 'block', maxHeight: '360px', objectFit: 'contain' }} />
+        </div>
+      )}
+      <div style={{ marginTop: '10px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        {detections.length ? detections.map((det, index) => (
+          <div key={`${det.label}-${index}`} style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', padding: '9px 10px', border: '1px solid var(--border)', borderRadius: '7px', background: 'var(--bg-elevated)' }}>
+            <div>
+              <div style={{ fontSize: '12px', fontWeight: 800, color: 'var(--text-primary)' }}>{String(det.label || 'Detection').replaceAll('_', ' ')}</div>
+              <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', marginTop: '3px' }}>{(det.bbox_px || []).join(', ')}</div>
+            </div>
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ fontSize: '12px', fontWeight: 800, color: 'var(--text-primary)' }}>{Number(det.confidence || 0).toFixed(1)}%</div>
+              <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '3px' }}>{det.severity || result?.classification?.severity || 'ROI'}</div>
+            </div>
+          </div>
+        )) : (
+          <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+            {yolo.model_used === 'coco_fallback' ? 'COCO fallback used for ROI crop; no disease boxes surfaced.' : 'No YOLO disease boxes detected.'}
+          </div>
+        )}
+      </div>
+    </Card>
+  );
+}
+
 function ImageAnalysis() {
   const [analysisType, setAnalysisType] = useState('xray');
   const [file, setFile]                 = useState(null);
@@ -778,6 +823,13 @@ function ImageAnalysis() {
               ?? (classification?.confidence != null ? Number(classification.confidence) * 100 : 0),
             findings:  payload.findings || detectedFindings,
             roi:       payload.roi || [],
+            yolo:      payload.yolo || {
+              detections: payload.yolo_detections || [],
+              annotated_path: payload.yolo_annotated_path || payload.segmentation?.yolo_overlay_url || '',
+              model_used: payload.yolo_model_used || '',
+            },
+            yolo_detections: payload.yolo_detections || payload.yolo?.detections || [],
+            yolo_annotated_path: payload.yolo_annotated_path || payload.yolo?.annotated_path || payload.segmentation?.yolo_overlay_url || '',
             gradcam:   payload.gradcam || {
               heatmap_url: payload.heatmap_url || payload.gradcam_path || '',
               top_regions: payload.gradcam_regions || [],
@@ -932,8 +984,8 @@ function ImageAnalysis() {
                   <SectionLabel>Region of Interest (ROI)</SectionLabel>
                   {result.roi?.map((r, i) => (
                     <div key={i} style={{ marginBottom: '8px', padding: '10px', background: 'var(--bg-elevated)', borderRadius: '6px', border: '1px solid var(--border)' }}>
-                      <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-primary)' }}>{r.region}</div>
-                      <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px' }}>{r.finding}</div>
+                      <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-primary)' }}>{r.region || r.label || 'Detected ROI'}</div>
+                      <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px' }}>{r.finding || r.severity || (r.bbox_px ? `bbox: ${r.bbox_px.join(', ')}` : '')}</div>
                     </div>
                   ))}
                 </Card>
@@ -946,6 +998,9 @@ function ImageAnalysis() {
                 Heatmap shows regions of highest model attention. Red/orange = strong activation. Overlay is illustrative — clinical verification required.
               </p>
             </Card>
+            <div style={{ flex: '1', minWidth: '300px' }}>
+              <YoloDetectionPanel result={result} />
+            </div>
           </div>
 
           {['skin', 'pathology'].includes(result.type || analysisType) && (

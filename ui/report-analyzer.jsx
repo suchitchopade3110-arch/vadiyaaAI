@@ -1,7 +1,7 @@
 {
 
 // report-analyzer.jsx — Report Analyzer (Phase 3)
-// UX-17: Brief/Full toggle
+// UX-17: Brief/Full toggle REMOVED - full explanation always shown
 // UX-14: Patient history diff view
 // UX-16: WebSocket with polling fallback
 // UX-20: Drug interaction chips
@@ -49,37 +49,14 @@ function MiniLabel({ children, style = {} }) {
   );
 }
 
-function ExplanationToggle({ brief, full, defaultMode = 'brief' }) {
-  const [mode, setMode] = useState(defaultMode);
+function ExplanationBlock({ brief, full }) {
   if (!brief && !full) return null;
+  const text = full || brief;
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', marginBottom: '10px' }}>
-        <MiniLabel style={{ marginBottom: 0 }}>Plain Language Summary</MiniLabel>
-        <div style={{ display: 'inline-flex', background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '6px', padding: '2px', gap: '2px' }}>
-          {['brief', 'full'].map((item) => (
-            <button
-              key={item}
-              onClick={() => setMode(item)}
-              style={{
-                padding: '4px 12px',
-                borderRadius: '4px',
-                border: 'none',
-                cursor: 'pointer',
-                fontSize: '11px',
-                fontWeight: 700,
-                background: mode === item ? 'oklch(0.46 0.19 145)' : 'transparent',
-                color: mode === item ? '#fff' : 'var(--text-muted)',
-                textTransform: 'capitalize',
-              }}
-            >
-              {item}
-            </button>
-          ))}
-        </div>
-      </div>
+      <MiniLabel>Plain Language Summary</MiniLabel>
       <div style={{ fontSize: '14px', color: 'var(--text-primary)', lineHeight: 1.7, whiteSpace: 'pre-wrap', padding: '4px 0' }}>
-        {mode === 'brief' ? (brief || full) : (full || brief)}
+        {text}
       </div>
     </div>
   );
@@ -400,8 +377,9 @@ function processPayload(payload, reportType) {
       source: item.source || item.url || '',
       snippet: item.snippet || item.excerpt || item.text || '',
     })),
-    explanation_brief: payload.explanation_brief || payload.plain_language_summary || payload.explanation || '',
-    explanation_full: payload.explanation_full || payload.rag_explanation || null,
+    explanation: payload.explanation_full || payload.rag_explanation ||
+                 payload.explanation_brief || payload.plain_language_summary ||
+                 payload.explanation || '',
     differential: payload.differential_diagnosis || null,
     ensemble: payload.ensemble_details || null,
     history_comparison: payload.history_comparison || null,
@@ -642,10 +620,10 @@ function ReportAnalyzer() {
             </Card>
           </div>
 
-          {(result.explanation_brief || result.explanation_full) && (
+          {result.explanation && (
             <Card style={{ borderLeft: '4px solid oklch(0.46 0.19 145)', background: 'oklch(0.46 0.19 145 / 0.03)' }}>
               {result.riskScore > 80 && <div style={{ padding: '8px 12px', background: 'oklch(0.65 0.20 25 / 0.1)', color: 'oklch(0.65 0.20 25)', borderRadius: '6px', marginBottom: '12px', fontSize: '13px', fontWeight: 800, border: '1px solid oklch(0.65 0.20 25 / 0.3)' }}>HIGH URGENCY: Please review these findings with a medical professional as soon as possible.</div>}
-              <ExplanationToggle brief={result.explanation_brief} full={result.explanation_full} />
+              <ExplanationBlock brief={result.explanation} full={result.explanation} />
             </Card>
           )}
 

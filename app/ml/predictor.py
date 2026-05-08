@@ -45,6 +45,35 @@ _scaler   = None
 _explainer = None
 
 
+def _base_model_for_shap(model):
+    """TreeExplainer works on the base estimator inside CalibratedClassifierCV."""
+    return (
+        model.calibrated_classifiers_[0].estimator
+        if hasattr(model, "calibrated_classifiers_")
+        else model
+    )
+
+
+def load_shap_explainer(model):
+    """Load SHAP explainer safely; regenerate and cache it if pickle is incompatible."""
+    path = _PKL["explainer"]
+    if os.path.exists(path):
+        try:
+            explainer = joblib.load(path)
+            log.info("[SHAP] Loaded explainer from %s", path)
+            return explainer
+        except Exception as exc:
+            log.info("[SHAP] Pickle incompatible (%s); regenerating", exc)
+
+    explainer = shap.TreeExplainer(_base_model_for_shap(model))
+    try:
+        joblib.dump(explainer, path)
+        log.info("[SHAP] Regenerated and saved fresh explainer to %s", path)
+    except Exception as exc:
+        log.warning("[SHAP] Regenerated explainer but could not save cache: %s", exc)
+    return explainer
+
+
 def _load_models():
     global _model, _scaler, _explainer
     if _model is None:
@@ -63,11 +92,7 @@ def _load_models():
 
         _model     = joblib.load(_PKL["model"])
         _scaler    = joblib.load(_PKL["scaler"])
-        try:
-            _explainer = joblib.load(_PKL["explainer"])
-        except Exception as exc:
-            log.warning("SHAP explainer pickle failed to load; will regenerate from model: %s", exc)
-            _explainer = None
+        _explainer = load_shap_explainer(_model)
         log.info(f"ML models loaded: {type(_model).__name__}, {type(_scaler).__name__}")
         
         # Issue 2 Fix: Extract features exactly as model expects them
@@ -169,14 +194,7 @@ def predict_safe(feature_dict: dict) -> dict:
 
     # ── SHAP ──────────────────────────────────────────────────────────────────
     try:
-        # TreeExplainer works on base model inside CalibratedClassifierCV
-        base_model = (
-            model.calibrated_classifiers_[0].estimator
-            if hasattr(model, "calibrated_classifiers_")
-            else model
-        )
-        shap_explainer_local = shap.TreeExplainer(base_model)
-        shap_vals = shap_explainer_local.shap_values(X_scaled)
+        shap_vals = explainer.shap_values(X_scaled)
 
         # binary classification → use class-1 shap values
         if isinstance(shap_vals, list):

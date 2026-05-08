@@ -8,7 +8,11 @@ from app.core.disclaimer import MEDICAL_DISCLAIMER
 from app.services.ingest_radiology_kb import (
     get_label_metadata,
     get_report_template,
-    query_radiology_kb,
+)
+from app.services.fix_image_analysis import (
+    filter_keyword_fallback_sources,
+    get_severity,
+    retrieve_image_evidence_from_main_kb,
 )
 
 WHO_IMAGE_EXPLAIN_SYSTEM_PROMPT = """
@@ -72,15 +76,23 @@ def build_image_explanation_prompt(
     """Build prompt context for a WHO-grounded image explanation."""
     label_meta = get_label_metadata(label)
     resolved_region = label_meta.get("body_region") or body_region
-    query = f"{label} {resolved_region} radiographic pattern findings diagnosis"
-    evidence_results = query_radiology_kb(query, n_results=top_k)
+    evidence_results = []
+    try:
+        evidence_results = retrieve_image_evidence_from_main_kb(
+            label,
+            gradcam_regions=gradcam_regions or [resolved_region],
+            top_k=top_k,
+        )
+    except Exception:
+        evidence_results = []
+    evidence_results = filter_keyword_fallback_sources(evidence_results)
     template = get_report_template(resolved_region)
 
     evidence_text = "\n".join(
         (
-            f"[{index + 1}] Pattern: {item['pattern']} | Urgency: {item['urgency']}\n"
-            f"    Conditions: {', '.join(item['associated_conditions'])}\n"
-            f"    Description: {item['text'][:260]}"
+            f"[{index + 1}] Source: {item.get('source') or item.get('title') or 'WHO Imaging Standards'} "
+            f"| Topic: {item.get('topic', '')}\n"
+            f"    Description: {str(item.get('text', ''))[:260]}"
         )
         for index, item in enumerate(evidence_results)
     ) or "No specific radiology pattern evidence retrieved."
@@ -113,15 +125,17 @@ def default_image_explanation(
     """Deterministic structured explanation used when no LLM JSON is available."""
     evidence = prompt_data.get("evidence") or []
     label_meta = prompt_data.get("label_meta") or {}
-    primary_pattern = evidence[0]["pattern"] if evidence else label
+    primary_pattern = (evidence[0].get("pattern") or evidence[0].get("title")) if evidence else label
     confidence_pct = _to_percent(confidence)
     urgency = label_meta.get("urgency", "unknown")
+    severity = get_severity(confidence_pct)
     uncertainty = confidence_pct < 50 or not evidence
 
     interpretation = (
         f"The leading AI finding is {label} with {confidence_pct}% confidence. "
         f"The closest radiology pattern match is {primary_pattern}. "
-        f"Urgency is classified as {urgency}; correlate with clinical history and formal radiology review."
+        f"Confidence severity is {severity}; urgency is classified as {urgency}. "
+        "Correlate with clinical history and formal radiology review."
     )
 
     return {
@@ -129,6 +143,11 @@ def default_image_explanation(
         "icd10_code": label_meta.get("icd10", "R91.8"),
         "urgency_level": urgency,
         "confidence_score": confidence_pct,
+        "classification_prob": confidence_pct,
+        "detection_confidence": confidence_pct,
+        "label_classification": "Class probability",
+        "label_detection": "Detection confidence",
+        "severity": severity,
         "radiographic_pattern": primary_pattern,
         "clinical_interpretation": interpretation,
         "patient_friendly_summary": (

@@ -150,6 +150,8 @@ def _preprocess_for_xrv(img_pil: Image.Image) -> torch.Tensor:
 
 
 def _build_findings(probabilities: Dict[str, float]) -> List[PathologyFinding]:
+    from app.services.fix_image_analysis import get_severity
+
     findings: List[PathologyFinding] = []
     for label in NIH_LABELS:
         prob = float(probabilities.get(label, 0.0))
@@ -159,7 +161,7 @@ def _build_findings(probabilities: Dict[str, float]) -> List[PathologyFinding]:
                 label=label,
                 probability=round(prob, 4),
                 detected=prob >= threshold,
-                severity=CLINICAL_SEVERITY.get(label, "LOW"),
+                severity=get_severity(prob * 100),
                 clinical_meaning=CLINICAL_MEANINGS.get(label, ""),
             )
         )
@@ -280,4 +282,3 @@ def generate_gradcam_14class(
         "gradcam_path": "",
         "job_id": job_id,
     }
-

@@ -27,6 +27,7 @@ uploads/
 # ML model files (download from Drive)
 app/ml/models/*.pkl
 *.pth
+*.pt
 app/ml/models/
 
 # Byte-compiled

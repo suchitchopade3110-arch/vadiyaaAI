@@ -14,7 +14,7 @@ COLLECTION = os.getenv("CHROMA_COLLECTION", "medical_evidence_week1_clean")
 CHUNK_SIZE = int(os.getenv("RAG_CHUNK_SIZE", "500"))
 CHUNK_OVERLAP = int(os.getenv("RAG_CHUNK_OVERLAP", "100"))
 UPLOAD_BATCH = int(os.getenv("RAG_UPLOAD_BATCH_SIZE", "32"))
-EMBED_DIMENSIONS = int(os.getenv("RAG_EMBED_DIMENSIONS", "1024"))
+EMBED_DIMENSIONS = int(os.getenv("RAG_EMBED_DIMENSIONS", "96"))
 
 SOURCE_META = {
     "source_name": "WHO Blue Books & Digital Pathology Standards",

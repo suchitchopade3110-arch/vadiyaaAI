@@ -157,19 +157,32 @@ async def get_image_status_or_result(analysis_id: uuid.UUID, db: AsyncSession = 
                     error=str(meta),
                 )
         return JobStatus(request_id=request_id, task_id=image_record.celery_task_id or "", status=image_record.status.value)
+
+    from app.services.fix_image_analysis import build_classification_findings, get_severity, get_severity_color
+
+    score = image_record.confidence or 0.0
+    severity = get_severity(score)
     
     confidence_data = {
-        "score": image_record.confidence or 0.0,
-        "color": "green" if image_record.confidence and image_record.confidence > 80 else "yellow",
-        "label": "High" if image_record.confidence and image_record.confidence > 80 else "Medium",
+        "score": score,
+        "color": get_severity_color(severity),
+        "label": severity,
         "uncertainty_flag": image_record.uncertainty_flag,
     }
     
     # Map to frontend structure
     findings = []
     if image_record.classification:
-        for k, v in image_record.classification_probs.items() if image_record.classification_probs else {image_record.classification: image_record.confidence}:
-            findings.append({"label": k, "confidence": v, "severity": "Moderate" if v > 50 else "Mild"})
+        raw_predictions = [
+            {
+                "label": k,
+                "classification_prob": v,
+                "detection_confidence": v,
+            }
+            for k, v in (image_record.classification_probs.items() if image_record.classification_probs else {image_record.classification: score}.items())
+        ]
+        findings = build_classification_findings(raw_predictions)
+    yolo_detections = image_record.roi_metadata if isinstance(image_record.roi_metadata, list) else []
 
     return {
         "request_id": request_id,
@@ -183,6 +196,13 @@ async def get_image_status_or_result(analysis_id: uuid.UUID, db: AsyncSession = 
         "explanation": image_record.explanation or "",
         "findings": findings,
         "roi": image_record.roi_metadata or [],
+        "yolo": {
+            "detections": yolo_detections,
+            "annotated_path": image_record.segmentation_overlay,
+            "model_used": "chest_xray_yolo" if yolo_detections else None,
+        },
+        "yolo_detections": yolo_detections,
+        "yolo_annotated_path": image_record.segmentation_overlay,
         "confidence": confidence_data,
         "uncertainty": image_record.uncertainty_flag,
         "anomaly_detected": image_record.anomaly_detected,
@@ -195,6 +215,7 @@ async def get_image_status_or_result(analysis_id: uuid.UUID, db: AsyncSession = 
         "segmentation": {
             "mask_url": image_record.segmentation_mask_path,
             "overlay_url": image_record.segmentation_overlay,
+            "yolo_overlay_url": image_record.segmentation_overlay,
             "roi_bounding_box": image_record.roi_metadata,
             "confidence": image_record.segmentation_confidence or 0.0
         },
@@ -202,7 +223,13 @@ async def get_image_status_or_result(analysis_id: uuid.UUID, db: AsyncSession = 
             "label": image_record.classification or "unknown",
             "probabilities": image_record.classification_probs or {},
             "top_class": image_record.classification or "unknown",
-            "top_confidence": image_record.confidence or 0.0
+            "top_confidence": score,
+            "classification_prob": score,
+            "detection_confidence": score,
+            "label_classification": "Class probability",
+            "label_detection": "Detection confidence",
+            "severity": severity,
+            "severity_color": get_severity_color(severity),
         }
     }
 
