@@ -68,6 +68,30 @@ const GRADCAM_REGION_SEEDS = [
   { label: 'Left hilum', x: 40, y: 44, r: 9, intensity: 0.38, severity: 'Low' },
 ];
 
+const GRADCAM_SEEDS_BY_TYPE = {
+  xray: GRADCAM_REGION_SEEDS,
+  ct: [
+    { label: 'Right upper lung', x: 36, y: 38, r: 12, intensity: 0.68, severity: 'Moderate' },
+    { label: 'Left upper lung', x: 64, y: 38, r: 12, intensity: 0.56, severity: 'Moderate' },
+    { label: 'Mediastinum', x: 50, y: 50, r: 10, intensity: 0.44, severity: 'Low' },
+  ],
+  mri: [
+    { label: 'Right hemisphere', x: 35, y: 48, r: 15, intensity: 0.70, severity: 'Moderate' },
+    { label: 'Left hemisphere', x: 65, y: 48, r: 15, intensity: 0.50, severity: 'Moderate' },
+    { label: 'Brain stem', x: 50, y: 72, r: 8, intensity: 0.40, severity: 'Low' },
+  ],
+  skin: [
+    { label: 'Lesion center', x: 50, y: 50, r: 16, intensity: 0.72, severity: 'Moderate' },
+    { label: 'Irregular border', x: 62, y: 44, r: 10, intensity: 0.54, severity: 'Moderate' },
+    { label: 'Pigment variation', x: 42, y: 57, r: 9, intensity: 0.46, severity: 'Low' },
+  ],
+  pathology: [
+    { label: 'Cellular atypia focus', x: 48, y: 46, r: 14, intensity: 0.72, severity: 'Moderate' },
+    { label: 'Tissue architecture', x: 62, y: 58, r: 12, intensity: 0.55, severity: 'Moderate' },
+    { label: 'Mitotic region', x: 38, y: 62, r: 8, intensity: 0.42, severity: 'Low' },
+  ],
+};
+
 const WHO_IMAGING_CHECKLIST = [
   { id: 'identity', label: 'Patient identity', detail: 'Name, birthdate, institutional ID verified before interpretation.', section: 'WHO §IV' },
   { id: 'date', label: 'Study date', detail: 'Compare with prior exams to classify acute vs chronic findings.', section: 'WHO §IV' },
@@ -124,15 +148,16 @@ function severityFromIntensity(intensity) {
 }
 
 function normalizeGradcamRegions({ result, type }) {
+  const seedSet = GRADCAM_SEEDS_BY_TYPE[type] || GRADCAM_REGION_SEEDS;
   const gradcamRegions = result?.gradcam?.top_regions || result?.gradcam_regions || result?.top_regions || [];
   const roiRegions = Array.isArray(result?.roi) ? result.roi : [];
   const findings = Array.isArray(result?.findings) ? result.findings : [];
   const rawRegions = gradcamRegions.length ? gradcamRegions : (roiRegions.length ? roiRegions : findings);
-  const base = rawRegions.length ? rawRegions : GRADCAM_REGION_SEEDS.slice(0, type === 'xray' ? 3 : 2);
+  const base = rawRegions.length ? rawRegions : seedSet.slice(0, type === 'xray' ? 3 : 2);
 
   return base.map((item, index) => {
     const source = typeof item === 'string' ? { label: item } : (item || {});
-    const seed = GRADCAM_REGION_SEEDS[index % GRADCAM_REGION_SEEDS.length];
+    const seed = seedSet[index % seedSet.length];
     const intensity = regionIntensity(source, source.confidence ? undefined : seed.intensity);
     const x = source.x != null ? percentNumber(source.x, seed.x)
       : source.left != null ? percentNumber(source.left, seed.x)

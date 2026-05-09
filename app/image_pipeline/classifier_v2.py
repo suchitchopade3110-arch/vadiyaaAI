@@ -16,6 +16,7 @@ probabilities) while exposing the richer 14-class contract.
 from __future__ import annotations
 
 import logging
+import math
 import re
 import uuid
 from functools import lru_cache
@@ -100,6 +101,14 @@ CLINICAL_MEANINGS = {
 DETECTION_THRESHOLDS = {label: 0.50 for label in NIH_LABELS}
 
 
+def _platt_scale(confidence: float, temperature: float = 3.2, bias: float = 0.0) -> float:
+    """Monotonic display calibration for overconfident classifier outputs."""
+    confidence = max(1e-6, min(1.0 - 1e-6, float(confidence or 0.0)))
+    logit = math.log(confidence / (1.0 - confidence))
+    calibrated = 1.0 / (1.0 + math.exp(-((logit / temperature) + bias)))
+    return round(max(0.0, min(1.0, calibrated)), 4)
+
+
 def _normalize_label(label: str) -> str:
     return re.sub(r"[\s_/-]+", "", label or "").lower()
 
@@ -155,13 +164,14 @@ def _build_findings(probabilities: Dict[str, float]) -> List[PathologyFinding]:
     findings: List[PathologyFinding] = []
     for label in NIH_LABELS:
         prob = float(probabilities.get(label, 0.0))
+        calibrated_prob = _platt_scale(prob)
         threshold = DETECTION_THRESHOLDS.get(label, 0.15)
         findings.append(
             PathologyFinding(
                 label=label,
-                probability=round(prob, 4),
+                probability=calibrated_prob,
                 detected=prob >= threshold,
-                severity=get_severity(prob * 100),
+                severity=get_severity(calibrated_prob * 100),
                 clinical_meaning=CLINICAL_MEANINGS.get(label, ""),
             )
         )
@@ -176,10 +186,11 @@ def _legacy_fallback(img_pil: Image.Image) -> ImageClassification14:
     legacy_probs = getattr(legacy, "probabilities", {}) or {}
     probabilities = {label: float(legacy_probs.get(label, 0.0)) for label in NIH_LABELS}
     findings = _build_findings(probabilities)
+    display_probabilities = {label: _platt_scale(value) for label, value in probabilities.items()}
     detected_pathologies = [item.label for item in findings if item.detected]
 
     primary = getattr(legacy, "label", "No Finding") or "No Finding"
-    primary_conf = float(getattr(legacy, "confidence", 0.0) or 0.0)
+    primary_conf = _platt_scale(float(getattr(legacy, "confidence", 0.0) or 0.0))
     no_finding = primary.lower() in {"normal", "no finding"}
     legacy_confidence = 0.0 if no_finding else primary_conf
 
@@ -192,7 +203,7 @@ def _legacy_fallback(img_pil: Image.Image) -> ImageClassification14:
         model_version="legacy-chexnet-fallback",
         label="No Finding" if no_finding else primary,
         confidence=round(legacy_confidence, 4),
-        probabilities=probabilities,
+        probabilities=display_probabilities,
         top_class="No Finding" if no_finding else primary,
         top_confidence=round(legacy_confidence, 4),
     )
@@ -227,6 +238,7 @@ def classify_image_14class(
         prob_lookup = {_normalize_label(label): float(prob) for label, prob in zip(xrv_labels, probs)}
         probabilities = {label: prob_lookup.get(_normalize_label(label), 0.0) for label in NIH_LABELS}
         all_findings = _build_findings(probabilities)
+        display_probabilities = {label: _platt_scale(value) for label, value in probabilities.items()}
         detected_pathologies = [item.label for item in all_findings if item.detected]
 
         if detected_pathologies:
@@ -249,7 +261,7 @@ def classify_image_14class(
             no_finding=no_finding,
             label=primary_finding,
             confidence=round(legacy_confidence, 4),
-            probabilities=probabilities,
+            probabilities=display_probabilities,
             top_class=primary_finding,
             top_confidence=round(legacy_confidence, 4),
         )

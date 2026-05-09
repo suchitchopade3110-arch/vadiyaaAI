@@ -54,6 +54,21 @@ _FRONTEND_DIR = os.path.join(
 )
 
 
+def _ingest_who_multimodal_on_startup() -> None:
+    """Idempotently ensure multimodal WHO RAG chunks exist in ChromaDB."""
+    enabled = os.getenv("WHO_MULTIMODAL_STARTUP_INGEST", "true").lower() not in {"0", "false", "no"}
+    if not enabled:
+        log.info("WHO multimodal startup ingest disabled")
+        return
+    try:
+        from app.services.ingest_who_multimodal_criteria import ingest_who_multimodal
+
+        uploaded = ingest_who_multimodal()
+        log.info("WHO multimodal startup ingest complete; uploaded=%s", uploaded)
+    except Exception as exc:
+        log.warning("WHO multimodal startup ingest skipped: %s", exc)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     setup_logging()
@@ -67,6 +82,8 @@ async def lifespan(app: FastAPI):
         log.info("Groq pre-warm initiated in background")
     except Exception as exc:
         log.warning("Startup speed warmup skipped: %s", exc)
+    threading.Thread(target=_ingest_who_multimodal_on_startup, daemon=True).start()
+    log.info("WHO multimodal RAG ingest check initiated in background")
     yield
     log.info("VaidyaAI API shutting down")
 

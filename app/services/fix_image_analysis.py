@@ -11,6 +11,10 @@ IMAGING_TOPICS = [
     "imaging_standards",
     "radiology",
     "chest_xray",
+    "mri",
+    "mri_brain_tumor",
+    "skin",
+    "pathology",
     "ct",
     "CT",
     "WHO_Diagnostic_Imaging_Protocols",
@@ -28,6 +32,15 @@ CONDITION_QUERIES = {
     "pleural": "pleural effusion blunting costophrenic angle chest xray",
     "atelectasis": "atelectasis lung collapse volume loss chest xray",
     "tuberculosis": "tuberculosis TB chest xray upper lobe cavitation WHO screening",
+    "glioma": "WHO CNS5 glioma MRI IDH wildtype IDH mutant EGFR TERT classification",
+    "meningioma": "WHO CNS5 meningioma MRI molecular grading TERT CDKN2A CDKN2B",
+    "pituitary": "pituitary neuroendocrine tumor PitNET MRI WHO classification",
+    "melanoma": "WHO skin melanoma ABCDE dermoscopy atypical pigment network",
+    "basal": "basal cell carcinoma WHO skin tumor classification",
+    "squamous": "squamous cell carcinoma keratoacanthoma WHO skin tumor classification",
+    "benign": "WHO cytopathology benign negative malignancy tier criteria",
+    "atypical": "WHO cytopathology atypical suspicious malignant tier criteria",
+    "malignant": "WHO cytopathology malignant tier digital pathology criteria",
 }
 
 
@@ -111,7 +124,7 @@ def _parse_chroma_results(raw: dict, top_k: int, min_score: float = 0.35) -> lis
                 "text": str(doc)[:300],
                 "source": source,
                 "source_file": meta.get("source_file", ""),
-                "title": meta.get("title") or meta.get("pattern") or source or "WHO Imaging Standards",
+                "title": meta.get("section_heading") or meta.get("pattern") or meta.get("title") or source or "WHO Imaging Standards",
                 "url": meta.get("url", ""),
                 "score": score,
                 "topic": meta.get("topic") or meta.get("category") or "",
@@ -136,7 +149,14 @@ def _metadata_keyword_results(collection, query: str, top_k: int) -> list[dict]:
     rows = []
     filters = [
         {"topic": "imaging_standards"},
+        {"topic": "chest_xray"},
+        {"topic": "CT"},
+        {"topic": "mri"},
+        {"topic": "mri_brain_tumor"},
+        {"topic": "skin"},
+        {"topic": "pathology"},
         {"source_name": "WHO Diagnostic Imaging Standards"},
+        {"source_name": "WHO Multimodal Diagnostic Criteria"},
         {"source_name": "WHO_Diagnostic_Imaging_Protocols"},
     ]
     seen = set()
@@ -167,7 +187,7 @@ def _metadata_keyword_results(collection, query: str, top_k: int) -> list[dict]:
                     "text": str(doc)[:300],
                     "source": meta.get("source_name") or meta.get("source_file") or "WHO Diagnostic Imaging Standards",
                     "source_file": meta.get("source_file", ""),
-                    "title": meta.get("title") or meta.get("section_heading") or "WHO Imaging Standards",
+                    "title": meta.get("section_heading") or meta.get("title") or "WHO Imaging Standards",
                     "url": meta.get("url", ""),
                     "score": round(score, 4),
                     "topic": meta.get("topic", ""),
