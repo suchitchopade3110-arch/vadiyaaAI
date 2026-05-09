@@ -59,7 +59,7 @@ def analyze_image(self, analysis_id: str, file_path: str, image_type: str, file_
         confidence = payload.get("confidence_score") or classification.get("confidence") or 0.0
         if confidence and confidence <= 1:
             confidence = round(confidence * 100, 2)
-        severity = get_severity(confidence)
+        severity = classification.get("severity") or get_severity(confidence)
         probability_rows = [
             {
                 "label": key,
@@ -95,7 +95,7 @@ def analyze_image(self, analysis_id: str, file_path: str, image_type: str, file_
                 "severity": severity,
                 "severity_color": get_severity_color(severity),
                 "probabilities": classification.get("probabilities", {}),
-                "findings": build_classification_findings(probability_rows),
+                "findings": classification.get("all_findings") or build_classification_findings(probability_rows),
                 "primary_finding": classification.get("primary_finding"),
                 "icd10_code": (payload.get("label_metadata") or {}).get("icd10"),
                 "urgency": (payload.get("label_metadata") or {}).get("urgency"),

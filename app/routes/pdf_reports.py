@@ -11,6 +11,7 @@ from app.services.pdf_report import generate_report_pdf
 from app.workers.celery_app import celery_app
 
 router = APIRouter()
+DISCLAIMER_HEADER = "AI-assisted analysis. NOT diagnostic."
 
 
 @router.get("/report/{job_id}/pdf")
@@ -75,6 +76,6 @@ async def download_pdf_report(job_id: str):
         media_type="application/pdf",
         headers={
             "Content-Disposition": f'attachment; filename="{filename}"',
-            "X-Medical-Disclaimer": MEDICAL_DISCLAIMER,
+            "X-Medical-Disclaimer": DISCLAIMER_HEADER,
         },
     )

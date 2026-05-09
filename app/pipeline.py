@@ -801,8 +801,8 @@ def run_image_pipeline(
         evidence_sources = filter_keyword_fallback_sources((who_outputs.get("radiology_evidence") or []) + (sources or []))
         confidence_value = float(getattr(classification, "confidence", 0.0) or 0.0)
         confidence_pct = round(confidence_value * 100 if confidence_value <= 1 else confidence_value, 2)
-        severity = get_severity(confidence_pct)
         classification_payload = dict(classification_json) if isinstance(classification_json, dict) else {}
+        severity = classification_payload.get("severity") or get_severity(confidence_pct)
         classification_payload.update(
             {
                 "classification_prob": confidence_pct,

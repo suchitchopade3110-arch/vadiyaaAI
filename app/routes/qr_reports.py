@@ -1,4 +1,5 @@
 import io
+import os
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
@@ -29,6 +30,24 @@ def _client_host(request: Request) -> str | None:
     return request.client.host if request.client else None
 
 
+def _public_base_url(request: Request) -> str:
+    configured = (
+        os.getenv("PUBLIC_BASE_URL")
+        or os.getenv("QR_BASE_URL")
+        or os.getenv("FRONTEND_BASE_URL")
+    )
+    if configured:
+        return configured.rstrip("/")
+
+    forwarded_proto = request.headers.get("x-forwarded-proto")
+    forwarded_host = request.headers.get("x-forwarded-host")
+    scheme = (forwarded_proto or request.url.scheme or "http").split(",", 1)[0].strip()
+    host = (forwarded_host or request.headers.get("host") or "").split(",", 1)[0].strip()
+    if host:
+        return f"{scheme}://{host}".rstrip("/")
+    return str(request.base_url).rstrip("/")
+
+
 def _decode_optional_user(credentials: HTTPAuthorizationCredentials | None) -> dict:
     if not credentials:
         return {}
@@ -50,7 +69,8 @@ async def get_report_qr(
     patient_id = current_user.get("patient_id") or request.query_params.get("patient_id")
     token = await generate_report_token(report_id, db, patient_id=patient_id)
     payload = jwt.decode(token, settings.QR_SECRET_KEY or settings.SECRET_KEY, algorithms=[ALGORITHM])
-    qr_bytes = generate_qr_image(token, base_url="http://192.168.76.159:8000")
+    base_url = _public_base_url(request)
+    qr_bytes = generate_qr_image(token, base_url=base_url)
 
     await log_qr_scan(
         db,
@@ -68,6 +88,7 @@ async def get_report_qr(
         headers={
             "Content-Disposition": f"inline; filename=report_{report_id[:8]}_qr.png",
             "Cache-Control": "no-store",
+            "X-QR-Base-URL": base_url,
         },
     )
 

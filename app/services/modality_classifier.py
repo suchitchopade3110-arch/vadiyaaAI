@@ -128,7 +128,10 @@ WHO_TIERS = {
 }
 
 
-def _severity(conf_pct: float) -> str:
+def _severity(conf_pct: float, label: str = "") -> str:
+    label_key = _normalize_label(label)
+    if any(term in label_key for term in ("no_tumor", "notumor", "normal", "benign", "negative", "no_finding", "unknown")):
+        return "LOW"
     if conf_pct >= 80:
         return "HIGH"
     if conf_pct >= 50:
@@ -289,7 +292,7 @@ def classify_mri(image_path: str) -> ClassificationResult:
                 "label": _display_label(item["label"], MRI_LABELS),
                 "probability": _calibrated_probability(float(item["score"])),
                 "detected": float(item["score"]) > 0.2,
-                "severity": _severity(_calibrated_probability(float(item["score"])) * 100),
+                "severity": _severity(_calibrated_probability(float(item["score"])) * 100, item["label"]),
                 "clinical_meaning": MRI_CLINICAL.get(_normalize_label(item["label"]), ""),
                 "icd10": MRI_ICD10.get(_normalize_label(item["label"]), "Z03.89"),
             }
@@ -301,7 +304,7 @@ def classify_mri(image_path: str) -> ClassificationResult:
             confidence=round(confidence, 4),
             probabilities={_display_label(r["label"], MRI_LABELS): _calibrated_probability(float(r["score"])) for r in results},
             primary_finding=display,
-            severity=_severity(confidence * 100),
+            severity=_severity(confidence * 100, raw_label),
             icd10=MRI_ICD10.get(raw_label, "Z03.89"),
             body_region="brain",
             modality="mri",
@@ -341,7 +344,7 @@ def classify_ct(image_path: str) -> ClassificationResult:
             confidence=round(confidence, 4),
             probabilities={label: _calibrated_probability(float(score)) for label, score in scores[:8]},
             primary_finding=top_label,
-            severity=_severity(confidence * 100),
+            severity=_severity(confidence * 100, top_label),
             icd10="R91.8",
             body_region="chest",
             modality="ct",
@@ -351,7 +354,7 @@ def classify_ct(image_path: str) -> ClassificationResult:
                     "label": label,
                     "probability": _calibrated_probability(float(score)),
                     "detected": float(score) > 0.3,
-                    "severity": _severity(_calibrated_probability(float(score)) * 100),
+                    "severity": _severity(_calibrated_probability(float(score)) * 100, label),
                     "clinical_meaning": "",
                     "icd10": "R91.8",
                 }
@@ -397,7 +400,7 @@ def classify_skin(image_path: str) -> ClassificationResult:
             confidence=round(confidence, 4),
             probabilities={_display_label(r["label"]): _calibrated_probability(float(r["score"])) for r in results},
             primary_finding=display,
-            severity=_severity(confidence * 100),
+            severity=_severity(confidence * 100, raw_label),
             icd10=SKIN_ICD10.get(raw_label, "L98.9"),
             body_region="skin",
             modality="skin",
@@ -407,7 +410,7 @@ def classify_skin(image_path: str) -> ClassificationResult:
                     "label": _display_label(item["label"]),
                     "probability": _calibrated_probability(float(item["score"])),
                     "detected": float(item["score"]) > 0.15,
-                    "severity": _severity(_calibrated_probability(float(item["score"])) * 100),
+                    "severity": _severity(_calibrated_probability(float(item["score"])) * 100, item["label"]),
                     "clinical_meaning": "",
                     "icd10": SKIN_ICD10.get(_normalize_label(item["label"]), "L98.9"),
                 }
@@ -447,7 +450,7 @@ def classify_pathology(image_path: str) -> ClassificationResult:
             confidence=round(confidence, 4),
             probabilities={_display_label(r["label"]): _calibrated_probability(float(r["score"])) for r in results},
             primary_finding=primary,
-            severity=_severity(confidence * 100),
+            severity=_severity(confidence * 100, tier["label"]),
             icd10="R89.9",
             body_region="tissue",
             modality="pathology",
@@ -457,7 +460,7 @@ def classify_pathology(image_path: str) -> ClassificationResult:
                     "label": _display_label(item["label"]),
                     "probability": _calibrated_probability(float(item["score"])),
                     "detected": float(item["score"]) > 0.1,
-                    "severity": _severity(_calibrated_probability(float(item["score"])) * 100),
+                    "severity": _severity(_calibrated_probability(float(item["score"])) * 100, item["label"]),
                     "clinical_meaning": WHO_TIERS.get(tier_key, {}).get("action", ""),
                     "icd10": "R89.9",
                 }
