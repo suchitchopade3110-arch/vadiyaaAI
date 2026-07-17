@@ -6,7 +6,7 @@ existing 1024-dim main medical_evidence collection stays 1024-dim because
 ChromaDB cannot mix vector dimensions inside one collection.
 
 Run from backend root:
-    python fix_who_ingest_dimensions.py
+    python tools/dev-scripts/fix_who_ingest_dimensions.py
 """
 
 from __future__ import annotations

@@ -35,13 +35,9 @@ limiter = Limiter(
 )
 from app.routes import (
     auth,
-    claims,
-    images,
-    jobs,
     patient_history_routes,
     pdf_reports,
     qr_reports,
-    reports,
     text_routes,
     websocket_routes,
 )
@@ -154,7 +150,9 @@ app.include_router(text_routes.router, prefix="/api", tags=["Direct Text Pipelin
 app.include_router(websocket_routes.router)
 app.include_router(patient_history_routes.router)
 app.include_router(auth.router, prefix="/auth", tags=["auth"])
-# Removed duplicated routes that are already included via api_router
+# claims/images/jobs/reports live under api_router (app/api/v1/routes/) — see
+# app/api/v1/router.py. The app/routes/ duplicates of those were dead code
+# and have been removed.
 app.include_router(pdf_reports.router, prefix="/api/v1", tags=["PDF Reports"])
 app.include_router(qr_reports.router)
 
