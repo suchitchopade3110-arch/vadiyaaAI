@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from celery.result import AsyncResult
 from datetime import datetime
 
+from app.core.auth import get_current_user
 from app.db.session import get_db
 from app.schemas.claim import ClaimRequest, ClaimAsyncResponse, ClaimResult
 from app.schemas.job import JobStatus
@@ -22,6 +23,7 @@ router = APIRouter()
 @router.post("/claim", status_code=202)
 async def submit_claim(
     payload: ClaimRequest,
+    user=Depends(get_current_user),
 ):
     """
     Submit a medical claim for verification.
@@ -50,7 +52,7 @@ async def submit_claim(
 
 
 @router.get("/claim/{task_id}")
-async def get_claim_combined(task_id: str):
+async def get_claim_combined(task_id: str, user=Depends(get_current_user)):
     """Combined status and result endpoint for the frontend."""
     result = AsyncResult(task_id, app=celery_app)
     state = result.state
@@ -67,7 +69,7 @@ async def get_claim_combined(task_id: str):
 
 
 @router.get("/claim/status/{task_id}", response_model=JobStatus)
-async def get_claim_status(task_id: str):
+async def get_claim_status(task_id: str, user=Depends(get_current_user)):
     """Poll claim verification job status."""
     request_id = str(uuid.uuid4())
     result = AsyncResult(task_id, app=celery_app)
@@ -103,7 +105,7 @@ async def get_claim_status(task_id: str):
 
 
 @router.get("/claim/result/{task_id}")
-async def get_claim_result(task_id: str):
+async def get_claim_result(task_id: str, user=Depends(get_current_user)):
     """Retrieve completed claim verification result."""
     result = AsyncResult(task_id, app=celery_app)
     

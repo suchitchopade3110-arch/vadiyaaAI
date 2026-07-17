@@ -7,6 +7,7 @@ from celery.result import AsyncResult
 from datetime import timezone, datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.auth import get_current_user
 from app.db.session import get_db
 
 UTC = timezone.utc
@@ -67,6 +68,7 @@ async def submit_image_analysis(
     file: UploadFile = File(..., description="Medical image: DICOM, JPG, PNG"),
     patient_id: str = Form(None),
     clinical_context: str = Form(""),
+    user=Depends(get_current_user),
 ):
     """
     Submit medical image for analysis.
@@ -99,7 +101,7 @@ async def submit_image_analysis(
 
 
 @router.get("/status/{task_id}", response_model=JobStatus)
-async def get_image_status(task_id: str):
+async def get_image_status(task_id: str, user=Depends(get_current_user)):
     """Poll image analysis task status."""
     request_id = str(uuid.uuid4())
     result = AsyncResult(task_id, app=celery_app)
@@ -129,7 +131,11 @@ async def get_image_status(task_id: str):
 
 
 @router.get("/image/{analysis_id}")
-async def get_image_status_or_result(analysis_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+async def get_image_status_or_result(
+    analysis_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user=Depends(get_current_user),
+):
     """Poll image analysis job status and get result when complete."""
     from app.services.image_service import ImageService
     
@@ -235,7 +241,7 @@ async def get_image_status_or_result(analysis_id: uuid.UUID, db: AsyncSession = 
 
 
 @router.get("/{task_id}")
-async def get_image_combined(task_id: str):
+async def get_image_combined(task_id: str, user=Depends(get_current_user)):
     """Combined status and result endpoint for the frontend."""
     result = AsyncResult(task_id, app=celery_app)
     state = result.state
