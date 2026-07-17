@@ -158,7 +158,18 @@ UPLOAD_DIR=./uploads
 DEBUG=true
 ```
 
-### 3️⃣ Database Setup
+### 3️⃣ Download Model Weights
+
+The CheXNet checkpoint is not tracked in git (binary weights don't belong in version control). Download it separately and place it at `app/ml/models/chexnet.pth` before running the image pipeline:
+
+```bash
+# Download chexnet.pth from the team's shared Drive/artifact storage
+# and place it at:
+mkdir -p app/ml/models
+mv ~/Downloads/chexnet.pth app/ml/models/chexnet.pth
+```
+
+### 4️⃣ Database Setup
 
 ```bash
 # Start PostgreSQL & create database
@@ -168,7 +179,7 @@ createdb -U vaidya vaidyaai
 alembic upgrade head
 ```
 
-### 4️⃣ Start Services (3 terminals)
+### 5️⃣ Start Services (3 terminals)
 
 ```bash
 # Terminal 1 — Redis

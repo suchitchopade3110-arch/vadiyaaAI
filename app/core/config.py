@@ -2,29 +2,20 @@ import os
 
 from pydantic import Field
 from pydantic_settings import BaseSettings
-from typing import List
 
 
 class Settings(BaseSettings):
     # App
     APP_ENV: str = "development"
-    SECRET_KEY: str = "change-me-in-production"
+    SECRET_KEY: str
     QR_SECRET_KEY: str = ""
-    ALLOWED_ORIGINS: List[str] = [
-        "*",
-        "http://localhost:3000",
-        "http://localhost:5500",
-        "http://127.0.0.1:5500",
-        "http://localhost:8000",
-        "null",  # file:// origin
-    ]
 
     # PostgreSQL
     POSTGRES_HOST: str = "localhost"
     POSTGRES_PORT: int = 5432
     POSTGRES_DB: str = "vaidyaai"
     POSTGRES_USER: str = "vaidya"
-    POSTGRES_PASSWORD: str = "vaidya123"
+    POSTGRES_PASSWORD: str
     DATABASE_URL_ENV: str = Field(default="", alias="DATABASE_URL")
 
     @property

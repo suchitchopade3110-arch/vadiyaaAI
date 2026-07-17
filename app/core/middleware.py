@@ -16,6 +16,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 from app.core.config import settings
 from app.core.errors import format_error
+from app.core.logging import request_id_var
 
 MAX_BYTES = settings.MAX_UPLOAD_SIZE_MB * 1024 * 1024
 logger = logging.getLogger("vaidya")
@@ -26,6 +27,7 @@ class CorrelationIDMiddleware(BaseHTTPMiddleware):
         request_id = request.scope.get("request_id", str(uuid.uuid4()))
         request.scope["request_id"] = request_id
         request.state.request_id = request_id
+        request_id_var.set(request_id)
         response = await call_next(request)
         if "X-Request-ID" not in response.headers:
             response.headers["X-Request-ID"] = request_id

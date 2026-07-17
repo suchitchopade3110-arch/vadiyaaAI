@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.auth import get_current_user
 from app.db.session import get_db
 from app.models.report import Report
 from app.services.patient_history_service import (
@@ -21,7 +22,12 @@ router = APIRouter(prefix="/patients", tags=["Patient History"])
 
 
 @router.get("/{patient_id}/history")
-async def patient_history(patient_id: str, limit: int = 10, db: AsyncSession = Depends(get_db)):
+async def patient_history(
+    patient_id: str,
+    limit: int = 10,
+    db: AsyncSession = Depends(get_db),
+    user=Depends(get_current_user),
+):
     """Return recent reports for a patient."""
     history = await get_patient_history(patient_id, limit=limit, db=db)
     if not history:
@@ -54,6 +60,7 @@ async def compare_patient_reports(
     current_id: str,
     previous_id: str,
     db: AsyncSession = Depends(get_db),
+    user=Depends(get_current_user),
 ):
     """Compare two reports for a patient."""
     current = await _load_patient_report(current_id, patient_id, db)
@@ -62,13 +69,22 @@ async def compare_patient_reports(
 
 
 @router.get("/{patient_id}/trend/{test_name}")
-async def lab_value_trend(patient_id: str, test_name: str, db: AsyncSession = Depends(get_db)):
+async def lab_value_trend(
+    patient_id: str,
+    test_name: str,
+    db: AsyncSession = Depends(get_db),
+    user=Depends(get_current_user),
+):
     """Return a longitudinal trend for a lab value."""
     return await get_longitudinal_trend(patient_id, test_name, db=db)
 
 
 @router.get("/{patient_id}/latest")
-async def latest_report(patient_id: str, db: AsyncSession = Depends(get_db)):
+async def latest_report(
+    patient_id: str,
+    db: AsyncSession = Depends(get_db),
+    user=Depends(get_current_user),
+):
     """Return the most recent report for a patient."""
     history = await get_patient_history(patient_id, limit=1, db=db)
     if not history:

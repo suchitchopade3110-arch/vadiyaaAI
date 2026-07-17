@@ -1,0 +1,158 @@
+# ── VaidyaAI — Production Docker Compose Stack ───────────────────────────────
+# Runs the API via gunicorn + uvicorn workers, no reload, no source bind-mount.
+# Usage:
+#   docker-compose -f docker-compose.prod.yml --env-file .env up --build -d
+
+services:
+
+  # ── FastAPI Application (gunicorn + uvicorn workers) ──────────────────────
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: >
+      gunicorn app.main:app
+      -k uvicorn.workers.UvicornWorker
+      --bind 0.0.0.0:8000
+      --workers 4
+      --timeout 120
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      - APP_ENV=production
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - UPLOAD_DIR=/app/uploads
+      - CORS_ORIGINS=https://app.vaidyaai.example.com
+    volumes:
+      - upload_data:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - vaidyaai-net
+
+  # ── Celery Worker: Claims (text pipeline) ─────────────────────────────────
+  worker-claims:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: celery -A app.workers.celery_app worker -Q claims -c 4 -l INFO -n claims@%h
+    env_file:
+      - .env
+    environment:
+      - APP_ENV=production
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+    volumes:
+      - upload_data:/app/uploads
+    depends_on:
+      - redis
+      - postgres
+    restart: unless-stopped
+    networks:
+      - vaidyaai-net
+
+  # ── Celery Worker: Images (GPU-bound — MedSAM + CheXNet) ─────────────────
+  worker-images:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: celery -A app.workers.celery_app worker -Q images -c 1 -l INFO -n images@%h
+    env_file:
+      - .env
+    environment:
+      - APP_ENV=production
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+    volumes:
+      - upload_data:/app/uploads
+    depends_on:
+      - redis
+      - postgres
+    restart: unless-stopped
+    networks:
+      - vaidyaai-net
+
+  # ── Celery Worker: Reports ────────────────────────────────────────────────
+  worker-reports:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: celery -A app.workers.celery_app worker -Q reports -c 2 -l INFO -n reports@%h
+    env_file:
+      - .env
+    environment:
+      - APP_ENV=production
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+    volumes:
+      - upload_data:/app/uploads
+    depends_on:
+      - redis
+      - postgres
+    restart: unless-stopped
+    networks:
+      - vaidyaai-net
+
+  # ── PostgreSQL ────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:15-alpine
+    env_file:
+      - .env
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-vaidya}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB:-vaidyaai}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-vaidya} -d ${POSTGRES_DB:-vaidyaai}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - vaidyaai-net
+
+  # ── Redis ─────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - vaidyaai-net
+
+# ── Volumes ────────────────────────────────────────────────────────────────────
+volumes:
+  postgres_data:
+  redis_data:
+  upload_data:
+
+# ── Networks ───────────────────────────────────────────────────────────────────
+networks:
+  vaidyaai-net:
+    driver: bridge

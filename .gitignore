@@ -32,3 +32,13 @@ app/ml/models/
 
 # Byte-compiled
 *.pyc
+
+# Logs
+*.log
+
+# Redis dump
+dump.rdb
+
+# ChromaDB persisted stores
+chromadb_store/
+data/chromadb/
