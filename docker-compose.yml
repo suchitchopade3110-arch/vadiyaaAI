@@ -16,6 +16,8 @@ services:
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     ports:
       - "8000:8000"
+    env_file:
+      - .env
     environment:
       - POSTGRES_HOST=postgres
       - POSTGRES_PORT=5432
@@ -23,7 +25,6 @@ services:
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/1
       - UPLOAD_DIR=/app/uploads
-      - DEBUG=true
     volumes:
       - .:/app
       - upload_data:/app/uploads
@@ -42,6 +43,8 @@ services:
       context: .
       dockerfile: Dockerfile
     command: celery -A app.workers.celery_app worker -Q claims -c 4 -l INFO -n claims@%h
+    env_file:
+      - .env
     environment:
       - POSTGRES_HOST=postgres
       - POSTGRES_PORT=5432
@@ -66,6 +69,8 @@ services:
     command: celery -A app.workers.celery_app worker -Q images -c 1 -l INFO -n images@%h
     # NOTE: Set -c 1 for image workers — MedSAM is GPU/memory intensive
     # Phase 2: Add GPU support: runtime: nvidia + device_requests
+    env_file:
+      - .env
     environment:
       - POSTGRES_HOST=postgres
       - POSTGRES_PORT=5432
@@ -88,6 +93,8 @@ services:
       context: .
       dockerfile: Dockerfile
     command: celery -A app.workers.celery_app worker -Q reports -c 2 -l INFO -n reports@%h
+    env_file:
+      - .env
     environment:
       - POSTGRES_HOST=postgres
       - POSTGRES_PORT=5432
@@ -112,6 +119,8 @@ services:
     command: celery -A app.workers.celery_app flower --port=5555
     ports:
       - "5555:5555"
+    env_file:
+      - .env
     environment:
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/1
@@ -124,10 +133,12 @@ services:
   # ── PostgreSQL ────────────────────────────────────────────────────────────
   postgres:
     image: postgres:15-alpine
+    env_file:
+      - .env
     environment:
-      - POSTGRES_USER=vaidya
-      - POSTGRES_PASSWORD=vaidya123
-      - POSTGRES_DB=vaidyaai
+      - POSTGRES_USER=${POSTGRES_USER:-vaidya}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB:-vaidyaai}
     ports:
       - "5433:5432"
     volumes:

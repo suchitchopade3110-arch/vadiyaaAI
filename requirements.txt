@@ -5,7 +5,9 @@
 # ── FastAPI + Server ──────────────────────────────────────────────────────────
 fastapi==0.111.0
 uvicorn[standard]==0.29.0
+gunicorn==22.0.0                 # Production WSGI/ASGI process manager
 python-multipart==0.0.9          # File uploads
+slowapi==0.1.9                   # Rate limiting (imported by app/main.py)
 
 # ── Database ──────────────────────────────────────────────────────────────────
 sqlalchemy==2.0.30
@@ -37,7 +39,9 @@ pytesseract==0.3.10
 PyMuPDF==1.27.2.3                # PDF text extraction / PaddleOCR PDF helpers
 reportlab==4.5.0                 # Clinical PDF report generation
 qrcode[pil]==7.4.2               # QR report access
-python-jose==3.3.0               # Signed QR tokens
+python-jose==3.3.0               # Signed QR tokens + auth JWTs
+passlib[bcrypt]==1.7.4            # Password hashing for user auth
+bcrypt==4.0.1                     # Pinned: bcrypt>=4.1 dropped __about__, breaks passlib 1.7.4
 paddlepaddle==2.6.2              # PaddleOCR runtime
 paddleocr==2.7.3                 # Medical document OCR
 

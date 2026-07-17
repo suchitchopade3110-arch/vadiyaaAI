@@ -1,7 +1,8 @@
 import uuid
 
-from fastapi import APIRouter, File, HTTPException, UploadFile, status, Request
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status, Request
 
+from app.core.auth import get_current_user
 from app.core.disclaimer import MEDICAL_DISCLAIMER
 from app.services.file_upload import file_upload_service
 from app.workers.db_persist import insert_image_analysis
@@ -15,7 +16,12 @@ VALID_TYPES = {"xray", "ct", "mri", "skin", "pathology"}
 
 @router.post("/image/{analysis_type}", status_code=202)
 @limiter.limit("10/minute")
-async def analyze_image(request: Request, analysis_type: str, file: UploadFile = File(...)):
+async def analyze_image(
+    request: Request,
+    analysis_type: str,
+    file: UploadFile = File(...),
+    user=Depends(get_current_user),
+):
     if analysis_type not in VALID_TYPES:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,

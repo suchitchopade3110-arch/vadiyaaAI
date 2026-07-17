@@ -30,7 +30,7 @@ from slowapi.errors import RateLimitExceeded
 
 limiter = Limiter(
     key_func=get_remote_address,  # swap to API key func later
-    storage_uri="redis://localhost:6380/0"
+    storage_uri=settings.REDIS_URL,
 )
 from app.routes import (
     auth,
@@ -88,12 +88,22 @@ async def lifespan(app: FastAPI):
     log.info("VaidyaAI API shutting down")
 
 
+_IS_PRODUCTION = settings.APP_ENV == "production"
+
+_CORS_ORIGINS_ENV = os.getenv("CORS_ORIGINS")
+if _IS_PRODUCTION and not _CORS_ORIGINS_ENV:
+    raise RuntimeError(
+        "CORS_ORIGINS must be set explicitly when APP_ENV=production "
+        "(refusing to fall back to the localhost default)."
+    )
+_CORS_ORIGINS = (_CORS_ORIGINS_ENV or "http://localhost:3000").split(",")
+
 app = FastAPI(
     title="VaidyaAI",
     description="Medical Intelligence Platform — AI-assisted analysis. NOT a medical diagnosis.",
     version="1.0.0",
-    docs_url="/docs",
-    redoc_url="/redoc",
+    docs_url=None if _IS_PRODUCTION else "/docs",
+    redoc_url=None if _IS_PRODUCTION else "/redoc",
     lifespan=lifespan,
 )
 
@@ -105,7 +115,7 @@ app.add_middleware(ErrorHandlerMiddleware)
 app.add_middleware(CorrelationIDMiddleware)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=os.getenv("CORS_ORIGINS", "http://localhost:3000").split(","),
+    allow_origins=_CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["GET", "POST", "OPTIONS", "DELETE"],
     allow_headers=["Authorization", "Content-Type"],
@@ -151,6 +161,23 @@ app.include_router(qr_reports.router)
 @app.get("/health")
 async def health():
     return {"status": "ok", "service": "VaidyaAI"}
+
+
+@app.get("/live")
+async def live():
+    """Liveness probe — process is up. No dependency checks."""
+    return {"status": "alive"}
+
+
+@app.get("/ready")
+async def ready():
+    """Readiness probe — checks DB and Redis connectivity."""
+    from app.api.v1.routes.health import _run_readiness_checks
+
+    checks = await _run_readiness_checks()
+    all_ok = all(check["ok"] for check in checks.values())
+    payload = {"status": "ready" if all_ok else "not_ready", "checks": checks}
+    return JSONResponse(status_code=200 if all_ok else 503, content=payload)
 
 
 @app.get("/")

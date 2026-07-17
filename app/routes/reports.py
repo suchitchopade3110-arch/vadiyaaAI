@@ -1,7 +1,8 @@
 import uuid
 
-from fastapi import APIRouter, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 
+from app.core.auth import get_current_user
 from app.core.disclaimer import MEDICAL_DISCLAIMER
 from app.schemas.report import ReportTypeEnum
 from app.services.file_upload import file_upload_service
@@ -14,7 +15,12 @@ VALID_TYPES = {item.value for item in ReportTypeEnum}
 
 
 @router.post("/report/{report_type}", status_code=202)
-async def analyze_report(report_type: str, file: UploadFile = File(...), patient_id: str | None = None):
+async def analyze_report(
+    report_type: str,
+    file: UploadFile = File(...),
+    patient_id: str | None = None,
+    user=Depends(get_current_user),
+):
     if report_type not in VALID_TYPES:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,

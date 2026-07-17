@@ -1,7 +1,8 @@
 import uuid
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
+from app.core.auth import get_current_user
 from app.core.disclaimer import MEDICAL_DISCLAIMER
 from app.schemas.claim import ClaimRequest
 from app.workers.claim_tasks import verify_claim as verify_claim_task
@@ -11,7 +12,7 @@ router = APIRouter()
 
 
 @router.post("/claim/{claim_id}", status_code=202)
-async def verify_claim(claim_id: str, body: ClaimRequest):
+async def verify_claim(claim_id: str, body: ClaimRequest, user=Depends(get_current_user)):
     job_id = str(uuid.uuid4())
     task = verify_claim_task.apply_async(
         args=[claim_id, body.claim_text],

@@ -1,0 +1,14 @@
+.git
+.venv
+__pycache__
+*.pyc
+*.log
+dump.rdb
+chromadb_store/
+data/chromadb/
+node_modules
+.env
+tests/
+notebooks/
+scratch/
+docs/
