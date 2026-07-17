@@ -14,7 +14,11 @@ router = APIRouter()
 VALID_TYPES = {"xray", "ct", "mri", "skin", "pathology"}
 
 
-@router.post("/image/{analysis_type}", status_code=202)
+@router.post(
+    "/image/{analysis_type}",
+    status_code=202,
+    summary="Upload a medical image for analysis",
+)
 @limiter.limit("10/minute")
 async def analyze_image(
     request: Request,
@@ -22,6 +26,12 @@ async def analyze_image(
     file: UploadFile = File(...),
     user=Depends(get_current_user),
 ):
+    """Queue a medical image (xray, ct, mri, skin, pathology) for async analysis.
+
+    Returns immediately with a `job_id`; poll `/jobs/{job_id}` for the
+    classification, segmentation, and GradCAM/explainability output once the
+    Celery task completes. Requires a valid access token.
+    """
     if analysis_type not in VALID_TYPES:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,

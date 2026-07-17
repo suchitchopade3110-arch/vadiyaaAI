@@ -8,6 +8,8 @@ from typing import Any
 
 from groq import Groq
 
+from app.utils.retry import with_retry
+
 
 MODEL = os.getenv("GROQ_DDX_MODEL", os.getenv("GROQ_MODEL", "llama-3.1-8b-instant"))
 DISCLAIMER = "AI-assisted analysis. NOT a medical diagnosis. Consult a qualified healthcare professional."
@@ -52,6 +54,19 @@ Return JSON:
 def _client() -> Groq | None:
     api_key = os.environ.get("GROQ_API_KEY")
     return Groq(api_key=api_key) if api_key else None
+
+
+@with_retry(max_retries=2, backoff_seconds=2.0)
+def _call_groq_ddx(client: Groq, prompt: str):
+    return client.chat.completions.create(
+        model=MODEL,
+        messages=[
+            {"role": "system", "content": DDX_SYSTEM},
+            {"role": "user", "content": prompt},
+        ],
+        temperature=0.2,
+        max_tokens=1500,
+    )
 
 
 def _parse_json(raw: str) -> dict[str, Any]:
@@ -136,15 +151,7 @@ def generate_differential(
     )
 
     try:
-        response = client.chat.completions.create(
-            model=MODEL,
-            messages=[
-                {"role": "system", "content": DDX_SYSTEM},
-                {"role": "user", "content": prompt},
-            ],
-            temperature=0.2,
-            max_tokens=1500,
-        )
+        response = _call_groq_ddx(client, prompt)
         result = _parse_json(response.choices[0].message.content.strip())
         result["differentials"] = (result.get("differentials") or [])[:3]
         result["disclaimer"] = DISCLAIMER

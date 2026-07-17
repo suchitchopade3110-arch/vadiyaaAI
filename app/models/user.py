@@ -17,6 +17,8 @@ class User(Base):
         String(100), unique=True, nullable=False, index=True
     )
     hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
+    # admin | clinician | reviewer
+    role: Mapped[str] = mapped_column(String(20), default="clinician", nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[DateTime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()

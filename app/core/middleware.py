@@ -4,6 +4,7 @@ VaidyaAI Middleware
 - APIContractMiddleware: Injects API contract headers and body fields.
 """
 
+import asyncio
 import time
 import uuid
 import json
@@ -32,6 +33,27 @@ class CorrelationIDMiddleware(BaseHTTPMiddleware):
         if "X-Request-ID" not in response.headers:
             response.headers["X-Request-ID"] = request_id
         return response
+
+
+class TimeoutMiddleware(BaseHTTPMiddleware):
+    """Safety net only — long-running work belongs in Celery, not a request handler."""
+
+    async def dispatch(self, request: Request, call_next):
+        try:
+            return await asyncio.wait_for(
+                call_next(request), timeout=settings.REQUEST_TIMEOUT_SECONDS
+            )
+        except asyncio.TimeoutError:
+            request_id = getattr(request.state, "request_id", "unknown")
+            logger.error(
+                "Request timed out request_id=%s path=%s timeout=%ss",
+                request_id, request.url.path, settings.REQUEST_TIMEOUT_SECONDS,
+            )
+            return format_error(
+                "REQUEST_TIMEOUT",
+                f"Request exceeded {settings.REQUEST_TIMEOUT_SECONDS}s time limit.",
+                504,
+            )
 
 
 class ErrorHandlerMiddleware(BaseHTTPMiddleware):

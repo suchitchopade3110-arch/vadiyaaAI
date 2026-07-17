@@ -10,6 +10,11 @@ router = APIRouter()
 
 @router.websocket("/ws/{job_id}")
 async def websocket_endpoint(websocket: WebSocket, job_id: str):
+    """Stream live Celery task status for `job_id` every 2s until it completes.
+
+    Sends `{job_id, status, progress, step}`, plus `result` on SUCCESS or
+    `error` on FAILURE, then closes the connection.
+    """
     await websocket.accept()
     try:
         while True:

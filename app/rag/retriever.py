@@ -33,6 +33,8 @@ import numpy as np
 import torch
 from transformers import BioGptModel, BioGptTokenizer
 
+from app.utils.retry import with_retry
+
 try:
     import chromadb.segment.impl.metadata.sqlite as chroma_sqlite
     import chromadb.segment.impl.vector.local_persistent_hnsw as chroma_hnsw
@@ -222,6 +224,7 @@ def _source_diversity(scored: list[dict], top_k: int, max_per_source: int = 2) -
 
 
 # ── PUBLIC API ────────────────────────────────────────────────────────────────
+@with_retry(max_retries=2, backoff_seconds=2.0)
 def retrieve_evidence(query: str, top_k: int = TOP_K_DEFAULT) -> dict:
     """
     Retrieve top-k medical evidence chunks for a query.

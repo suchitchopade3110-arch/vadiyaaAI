@@ -66,6 +66,13 @@ class Settings(BaseSettings):
     IMAGE_TASK_TIMEOUT: int = 120   # MedSAM can be slow
     TEXT_TASK_TIMEOUT: int = 30
 
+    # Auth
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 20
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+
+    # Request-level safety net (long-running work belongs in Celery, not here)
+    REQUEST_TIMEOUT_SECONDS: int = 30
+
     class Config:
         env_file = ".env"
         case_sensitive = True
