@@ -62,7 +62,7 @@ class FileUploadService:
         if len(content) > self.max_bytes:
             raise HTTPException(
                 status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-                detail=f"File exceeds limit."
+                detail="File exceeds limit."
             )
 
         pipeline_type = EXTENSION_PIPELINE_MAP.get(extension, "unknown")

@@ -496,7 +496,7 @@ def batch_process_images(
             path = image_paths[idx]
             conf = results[idx].confidence
             err  = results[idx].metadata.get("error")
-            status = f"conf={conf:.3f}" if not err else f"ERROR"
+            status = f"conf={conf:.3f}" if not err else "ERROR"
             print(f"  [{idx+1}/{len(image_paths)}] {os.path.basename(path)}  {status}")
 
     return results

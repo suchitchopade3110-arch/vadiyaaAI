@@ -9,6 +9,9 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/suchitchopade3110-arch/vadiyaaAI/actions/workflows/ci.yml">
+    <img src="https://github.com/suchitchopade3110-arch/vadiyaaAI/actions/workflows/ci.yml/badge.svg" alt="CI status" />
+  </a>
   <img src="https://img.shields.io/badge/python-3.11-blue?logo=python&logoColor=white" />
   <img src="https://img.shields.io/badge/FastAPI-0.111-009688?logo=fastapi&logoColor=white" />
   <img src="https://img.shields.io/badge/Celery-5.4-37814A?logo=celery&logoColor=white" />
@@ -502,6 +505,41 @@ Built with 🔥 for **Smart India Hackathon 2025** by Team Straw Hats from **Sri
 | 📊 **Subhiksha** | ML / Prediction Engineer |
 | 🗃️ **Thaariha** | Data / Preprocessing Engineer |
 | 🔬 **Shreekumar** | Domain / Research Lead |
+
+---
+
+## ✅ Testing & CI
+
+- **Unit tests** (no live services needed): `pytest tests/test_pipelines.py tests/test_rag_integration.py tests/test_file_validator.py tests/test_errors.py tests/test_retry.py tests/test_auth.py -m "not integration"`
+- **Coverage**: `pytest --cov=app --cov-report=term-missing` (see `pyproject.toml` for the `[tool.ruff]` and `[tool.pytest.ini_options]` config, including the `integration` marker used to separate infra-dependent tests).
+- **E2E** (needs the full stack running — API + Redis + Postgres + Celery): `docker-compose up -d`, wait for `/health`, then `pytest tests/test_e2e.py -v`. Self-skips if the server isn't reachable.
+- **Lint**: `ruff check app/`.
+- CI runs lint + unit tests + coverage on every push/PR, and the Docker Compose E2E stack on every PR (non-blocking) and on `main` (blocking) — see `.github/workflows/ci.yml`.
+
+## 🧪 Load Testing
+
+A lightweight [Locust](https://locust.io/) script lives at `load-tests/locustfile.py`, targeting `/health`, `/api/v1/verify/claim`, `/api/v1/analyze/report/{type}`, and `/api/v1/analyze/image/{type}`. It's a manual pre-demo sanity tool, not part of CI.
+
+```bash
+pip install locust
+locust -f load-tests/locustfile.py --host http://localhost:8000
+```
+
+Then open http://localhost:8089, set concurrent users / spawn rate, and watch response times and failure rates. Every simulated user registers its own throwaway account on start and reuses the access token for the rest of its session, matching the real auth flow.
+
+## 📈 Monitoring
+
+Prometheus-compatible metrics are exposed at `GET /metrics` (request counts, latency histograms by route, status codes — via `prometheus-fastapi-instrumentator`). No Grafana/dashboard is set up yet; point a Prometheus scrape config at `/metrics` when there's a real deployment target.
+
+## 🩺 Bias / Model Audit
+
+`app/ml/audit/run_bias_audit.py` runs a lightweight bias audit against `app/ml/audit/data/verified_claims_v1.csv` and writes `app/ml/audit/reports/bias_audit_v1_report.{csv,json}`. Run it directly:
+
+```bash
+python -m app.ml.audit.run_bias_audit
+```
+
+The admin dashboard also triggers it on demand via `GET /api/v1/admin/bias-audit` (admin role required) if a report doesn't already exist.
 
 ---
 

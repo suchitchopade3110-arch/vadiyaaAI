@@ -42,3 +42,10 @@ dump.rdb
 # ChromaDB persisted stores
 chromadb_store/
 data/chromadb/
+
+# Test/coverage artifacts
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.pytest_cache/

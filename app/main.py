@@ -25,6 +25,7 @@ from app.db.session import engine
 from app.db import base  # noqa: F401 — import models for Alembic
 from fastapi.exceptions import RequestValidationError
 from app.core.errors import validation_exception_handler, general_exception_handler
+from prometheus_fastapi_instrumentator import Instrumentator
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
@@ -156,6 +157,11 @@ app.include_router(auth.router, prefix="/auth", tags=["auth"])
 app.include_router(pdf_reports.router, prefix="/api/v1", tags=["PDF Reports"])
 app.include_router(qr_reports.router)
 
+# Standard HTTP metrics (request count, latency histograms by route, status
+# codes) at GET /metrics for Prometheus to scrape. No auth — matches the
+# usual convention of firewalling /metrics at the network level rather than
+# gating it in-app.
+Instrumentator().instrument(app).expose(app, include_in_schema=False)
 
 
 @app.get("/health")
