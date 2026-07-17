@@ -9,6 +9,8 @@ import cv2
 import fitz
 import numpy as np
 
+from app.utils.retry import with_retry
+
 _ocr_engine = None
 MODEL_ROOT = Path(__file__).resolve().parents[2] / "data" / "paddleocr"
 
@@ -49,6 +51,7 @@ def preprocess_image(image: np.ndarray) -> np.ndarray:
     return cv2.cvtColor(denoised, cv2.COLOR_GRAY2BGR)
 
 
+@with_retry(max_retries=1, backoff_seconds=1.0)
 def ocr_image(image: np.ndarray) -> list[dict[str, Any]]:
     """Run PaddleOCR on a numpy image and return text/confidence/bbox rows."""
     result = _get_ocr_engine().ocr(image, cls=True)

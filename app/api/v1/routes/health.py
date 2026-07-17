@@ -12,8 +12,9 @@ UTC = timezone.utc
 router = APIRouter()
 
 
-@router.get("")
+@router.get("", summary="Basic health check")
 async def health():
+    """Static ok/service/version payload — no dependency checks."""
     return {
         "status": "ok",
         "service": "VaidyaAI",

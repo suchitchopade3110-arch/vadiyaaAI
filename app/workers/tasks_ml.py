@@ -98,6 +98,11 @@ def run_ml_pipeline(ner_row: dict) -> dict:
         return {"status": "error", "error": str(exc)}
 
 
+def _retry_delay(retries: int) -> int:
+    """Exponential backoff: 10s, 40s, 160s. Matches app.workers.pipeline_tasks."""
+    return 10 * (4 ** retries)
+
+
 # ── Celery-wrapped version (same logic, but dispatchable via .delay()) ────────
 try:
     from app.workers.celery_app import celery_app
@@ -109,8 +114,18 @@ try:
         default_retry_delay=5,
     )
     def run_ml_pipeline_task(self, ner_row: dict) -> dict:
-        """Celery task — delegates to run_ml_pipeline()."""
-        return run_ml_pipeline(ner_row)
+        """Celery task — delegates to run_ml_pipeline(), retrying on failure.
+
+        run_ml_pipeline() catches its own exceptions and returns
+        {"status": "error", ...} rather than raising, so we translate that
+        into a real retry here instead of silently returning the error.
+        """
+        result = run_ml_pipeline(ner_row)
+        if result.get("status") == "error":
+            exc = RuntimeError(result.get("error", "run_ml_pipeline failed"))
+            log.error("[%s] ML task failed: %s", self.request.id, exc)
+            raise self.retry(exc=exc, countdown=_retry_delay(self.request.retries))
+        return result
 
 except ImportError:
     log.warning("Celery app not available — run_ml_pipeline_task not registered")

@@ -10,9 +10,14 @@ from app.services.pipeline_controller import run_text_pipeline
 router = APIRouter()
 
 
-@router.post("/text")
+@router.post("/text", summary="Run the direct synchronous text pipeline")
 @limiter.limit("20/minute")
 async def text_pipeline(request: Request, data: QueryRequest):
+    """Run the text/lab-value pipeline synchronously (no Celery job/polling).
+
+    Returns diagnosis, confidence, evidence, SHAP values, entities, risk
+    factors, and anomalies directly in the response.
+    """
     try:
         result = run_text_pipeline(data.query)
         return {

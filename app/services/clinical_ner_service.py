@@ -8,6 +8,7 @@ import re
 from typing import Any
 
 from app.services.urinalysis_knowledge_base import URINE_NER_PROMPT
+from app.utils.retry import with_retry
 
 MODEL = os.getenv("GROQ_NER_MODEL", os.getenv("GROQ_MODEL", "llama-3.1-8b-instant"))
 
@@ -66,6 +67,7 @@ def _get_client():
     return _client
 
 
+@with_retry(max_retries=2, backoff_seconds=2.0)
 def _call_groq(prompt: str, temperature: float = 0.1) -> str:
     response = _get_client().chat.completions.create(
         model=MODEL,

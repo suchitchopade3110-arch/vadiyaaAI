@@ -18,6 +18,7 @@ from app.core.middleware import (
     CorrelationIDMiddleware,
     ErrorHandlerMiddleware,
     MaxBodySizeMiddleware,
+    TimeoutMiddleware,
 )
 from app.api.v1.router import api_router
 from app.db.session import engine
@@ -110,6 +111,7 @@ app = FastAPI(
 # Starlette wraps middleware in reverse registration order.
 # Keep CorrelationID outermost so APIContract/logging reuse the same request ID.
 app.add_middleware(MaxBodySizeMiddleware)
+app.add_middleware(TimeoutMiddleware)
 app.add_middleware(APIContractMiddleware)
 app.add_middleware(ErrorHandlerMiddleware)
 app.add_middleware(CorrelationIDMiddleware)

@@ -505,6 +505,16 @@ Built with 🔥 for **Smart India Hackathon 2025** by Team Straw Hats from **Sri
 
 ---
 
+## 🔐 Security
+
+- **Dependency scanning**: run `make audit` to check `requirements.txt` against known vulnerabilities via [pip-audit](https://github.com/pypa/pip-audit). It reports findings only — it never auto-upgrades anything, since some pins (celery, redis, torch, etc.) are intentional. Review and bump versions deliberately.
+- **Auth**: JWT access tokens (~20 min) + refresh tokens (~7 days, revocable via the `refresh_tokens` table). See `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout`.
+- **RBAC**: roles are `admin` / `clinician` / `reviewer` (`app.core.auth.require_role`). Admin-only routes currently: `app/api/v1/routes/admin.py`.
+- **Rate limiting**: slowapi, backed by `settings.REDIS_URL` — applied to upload/analysis endpoints (`images`, `reports`, `claims`, `text`).
+- Report suspected vulnerabilities to the maintainers privately rather than filing a public issue.
+
+---
+
 ## 📝 Key Design Principles
 
 - 🔒 **Strict Model Isolation** — BioGPT = embeddings only, ClinicalBERT = NER only, all generation → Groq/LLaMA-3

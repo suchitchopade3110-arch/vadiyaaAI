@@ -22,6 +22,7 @@ celery_app.conf.update(
     task_max_retries=3,
     task_default_retry_delay=5,
     broker_connection_retry_on_startup=True,
+    broker_pool_limit=10,  # max broker connections per worker process (was unset)
     result_expires=86400,
     worker_prefetch_multiplier=1,
     timezone="UTC",

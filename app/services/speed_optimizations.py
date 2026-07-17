@@ -29,16 +29,23 @@ RAG_CACHE_TTL = 7200
 XGBOOST_CACHE_TTL = 1800
 CACHE_SOCKET_TIMEOUT = 0.25
 
-_redis = (
-    redis.Redis.from_url(
+REDIS_MAX_CONNECTIONS = 20
+
+# Explicit, bounded connection pool shared by every _redis call in this module.
+# `redis.Redis.from_url()` would build its own pool implicitly (default
+# max_connections is unbounded), so we construct it ourselves to cap it.
+_redis_pool = (
+    redis.ConnectionPool.from_url(
         settings.REDIS_URL,
         decode_responses=True,
         socket_connect_timeout=CACHE_SOCKET_TIMEOUT,
         socket_timeout=CACHE_SOCKET_TIMEOUT,
+        max_connections=REDIS_MAX_CONNECTIONS,
     )
     if redis is not None
     else None
 )
+_redis = redis.Redis(connection_pool=_redis_pool) if _redis_pool is not None else None
 _cache_available: bool | None = False if redis is None else None
 
 

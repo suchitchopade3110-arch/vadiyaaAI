@@ -201,14 +201,22 @@ def persist_image_analysis(result: dict) -> bool:
         return False
 
 
+_MARK_FAILED_TABLES = {"claims", "reports", "image_analyses"}
+
+
 def mark_failed(table: str, record_id: str, error: str) -> bool:
     """
     Mark a record as failed in DB when task crashes.
     table: 'claims' | 'reports' | 'image_analyses'
     """
+    if table not in _MARK_FAILED_TABLES:
+        logger.error(f"mark_failed refused: unknown table '{table}'")
+        return False
     try:
         conn = _get_conn()
         cur  = conn.cursor()
+        # `table` is validated against an allow-list above, so this is not
+        # string-interpolated user input despite the f-string.
         cur.execute(
             f"UPDATE {table} SET status = 'FAILED', completed_at = %s WHERE id = %s",
             (_utc_now(), record_id)

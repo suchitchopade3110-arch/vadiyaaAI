@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
 
 from app.core.auth import get_current_user
 from app.core.disclaimer import MEDICAL_DISCLAIMER
@@ -8,19 +8,32 @@ from app.schemas.report import ReportTypeEnum
 from app.services.file_upload import file_upload_service
 from app.workers.db_persist import insert_report
 from app.workers.report_tasks import analyze_report as analyze_report_task
+from app.main import limiter
 
 router = APIRouter()
 
 VALID_TYPES = {item.value for item in ReportTypeEnum}
 
 
-@router.post("/report/{report_type}", status_code=202)
+@router.post(
+    "/report/{report_type}",
+    status_code=202,
+    summary="Upload a lab report for analysis",
+)
+@limiter.limit("10/minute")
 async def analyze_report(
+    request: Request,
     report_type: str,
     file: UploadFile = File(...),
     patient_id: str | None = None,
     user=Depends(get_current_user),
 ):
+    """Queue a lab report (PDF/CSV/image) for async OCR + NER + risk analysis.
+
+    Returns immediately with a `job_id`; poll `/jobs/{job_id}` for the
+    extracted entities, risk prediction, anomalies, and explanation once the
+    Celery task completes. Requires a valid access token.
+    """
     if report_type not in VALID_TYPES:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
