@@ -1,0 +1,143 @@
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+env:
+  # Ephemeral, CI-only values. Never used outside a throwaway workflow run.
+  SECRET_KEY: ci-only-secret-not-for-real-use
+  POSTGRES_PASSWORD: ci-only-password
+  APP_ENV: development
+  CORS_ORIGINS: http://localhost:3000
+
+jobs:
+  lint-and-unit:
+    name: Lint + unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Lint (ruff)
+        run: ruff check app/
+
+      - name: Unit tests with coverage
+        # NOTE ON THE THRESHOLD: measured locally at 2.4% with `-m "not
+        # integration"` (correctly excluding the two rag_integration tests
+        # that need live Redis/Postgres) and without tests/test_pipelines.py,
+        # which needs torch — unavailable in the sandbox this CI was authored
+        # in. Real runners have full network access, so test_pipelines.py
+        # will actually run here and should push the true number a bit
+        # higher. 2% is a conservative floor, not a target — re-measure
+        # after the first CI run and raise it to just under the real number.
+        run: |
+          pytest tests/test_pipelines.py tests/test_rag_integration.py \
+            tests/test_file_validator.py tests/test_errors.py \
+            tests/test_retry.py tests/test_auth.py \
+            -m "not integration" \
+            --cov=app --cov-report=term-missing --cov-report=xml \
+            --cov-fail-under=2
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-xml
+          path: coverage.xml
+
+  bias-audit:
+    name: Bias audit (informational)
+    runs-on: ubuntu-latest
+    # Never blocks the build — this is a domain-lead-review artifact, not a
+    # pass/fail gate. Uses the same dependency install as lint-and-unit.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run bias audit
+        run: python -m app.ml.audit.run_bias_audit
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bias-audit-report
+          path: app/ml/audit/reports/
+
+  e2e:
+    name: Docker Compose E2E
+    runs-on: ubuntu-latest
+    # Required to pass on main; allowed to fail without blocking a PR, since
+    # the full stack (Celery workers, Groq, OCR models) can be slow/flaky in
+    # a shared CI runner. It still runs on every PR so regressions are
+    # visible, just not blocking.
+    continue-on-error: ${{ github.event_name == 'pull_request' }}
+    needs: lint-and-unit
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Write CI .env
+        run: |
+          cat > .env <<EOF
+          APP_ENV=development
+          SECRET_KEY=ci-only-secret-not-for-real-use
+          POSTGRES_PASSWORD=ci-only-password
+          POSTGRES_USER=vaidya
+          POSTGRES_DB=vaidyaai
+          CORS_ORIGINS=http://localhost:3000
+          GROQ_API_KEY=${{ secrets.GROQ_API_KEY }}
+          EOF
+
+      - name: Build and start the stack
+        run: docker compose up -d --build
+
+      - name: Wait for /health
+        run: |
+          for i in $(seq 1 60); do
+            if curl -sf http://127.0.0.1:8000/health > /dev/null; then
+              echo "API is healthy"
+              exit 0
+            fi
+            echo "Waiting for API... ($i/60)"
+            sleep 5
+          done
+          echo "API never became healthy — dumping logs"
+          docker compose logs
+          exit 1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install test-only dependencies
+        run: pip install pytest httpx
+
+      - name: Run E2E suite
+        run: pytest tests/test_e2e.py -v --tb=short
+
+      - name: Dump logs on failure
+        if: failure()
+        run: docker compose logs
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v

@@ -1,7 +1,7 @@
 """Verify VaidyaAI classifier accuracy upgrades and warm model caches.
 
 Run from backend root:
-    python fix_classifier_accuracy.py
+    python tools/dev-scripts/fix_classifier_accuracy.py
 
 This script is intentionally idempotent. The code patches live in:
     app/services/modality_classifier.py
@@ -15,7 +15,7 @@ import sys
 from pathlib import Path
 
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parent.parent.parent
 
 
 def run(label: str, code: str, timeout: int = 300) -> bool:

@@ -7,9 +7,10 @@ import uuid
 from pathlib import Path
 
 import aiofiles
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException, status
+from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException, status
 from celery.result import AsyncResult
 
+from app.core.auth import get_current_user
 from app.schemas.report import ReportAsyncResponse, ReportTypeEnum
 from app.schemas.job import JobStatus
 from app.workers.pipeline_tasks import analyze_report_task
@@ -65,6 +66,7 @@ async def submit_report_analysis(
     gender: str = Form("male"),
     age: int = Form(40),
     explanation_mode: str = Form("brief"),
+    user=Depends(get_current_user),
 ):
     """
     Submit lab report / clinical note for analysis.
@@ -103,7 +105,7 @@ async def submit_report_analysis(
 
 @router.get("/status/{task_id}", response_model=JobStatus)
 @router.get("/report/status/{task_id}", response_model=JobStatus)
-async def get_report_status(task_id: str):
+async def get_report_status(task_id: str, user=Depends(get_current_user)):
     """Poll report analysis job status."""
     request_id = str(uuid.uuid4())
     result = AsyncResult(task_id, app=celery_app)
@@ -129,7 +131,7 @@ async def get_report_status(task_id: str):
 
 
 @router.get("/{task_id}")
-async def get_report_combined(task_id: str):
+async def get_report_combined(task_id: str, user=Depends(get_current_user)):
     """Combined status and result endpoint for the frontend."""
     result = AsyncResult(task_id, app=celery_app)
     state = result.state
@@ -145,7 +147,7 @@ async def get_report_combined(task_id: str):
 
 
 @router.get("/report/result/{task_id}")
-async def get_report_result(task_id: str):
+async def get_report_result(task_id: str, user=Depends(get_current_user)):
     """Retrieve completed report analysis result."""
     result = AsyncResult(task_id, app=celery_app)
     if result.state != "SUCCESS":

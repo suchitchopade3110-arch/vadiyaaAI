@@ -25,3 +25,50 @@ dependencies = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+markers = [
+    "integration: needs live infra (Celery worker + Redis + Postgres); excluded from the no-infra CI job via `-m \"not integration\"`.",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+# Ruff's own default set (pyflakes + a few high-signal pycodestyle checks).
+# Deliberately NOT the full "E"/"W" pycodestyle categories — those are
+# whitespace/line-length formatting concerns (black's job, not a linter's),
+# and this codebase predates any line-length convention.
+select = ["E4", "E7", "E9", "F"]
+ignore = [
+    "E402",  # module-import-not-at-top-of-file — this codebase deliberately
+             # defers heavy ML imports (torch/paddleocr/transformers) inside
+             # functions/conditionals across many modules; not worth a mass
+             # reorder for a CI-setup pass.
+    "E701",  # multiple-statements-on-one-line-colon — pervasive compact
+             # conditional style already in use throughout app/services and
+             # app/image_pipeline; a style choice predating this CI setup,
+             # not a correctness issue.
+    "F401",  # unused-import — 53 occurrences across ~35 files as of this CI
+             # setup. Spot-checking several showed imports that look unused
+             # by name but exist for a SQLAlchemy relationship/registry side
+             # effect (e.g. app/models/image_analysis.py imports
+             # AnalysisStatus). Blindly stripping 53 imports without
+             # per-file review risks breaking exactly that pattern, and is
+             # out of scope for a CI-setup pass. Tracked as a follow-up —
+             # someone with context on each module should do this properly.
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Intentional wildcard re-export barrel file.
+"app/schemas/schemas.py" = ["F403"]
+# Pre-existing issues in demo-only / dead code paths (process_all() is never
+# called outside commented-out example usage at the bottom of the file) and
+# unused-exception-binding/unused-local-set nits in ClinicalBERT NER helpers
+# these files' headers attribute to specific teammates — left for them
+# rather than touched as a side effect of adding CI.
+"app/image_pipeline/segmentor.py" = ["F821", "F841"]
+"app/services/preprocessor.py" = ["F841", "F811", "E741"]
+# SQLAlchemy relationship() forward references (Mapped["Claim"], etc.) are
+# quoted strings resolved later via the mapper registry — pyflakes has no
+# way to know that and flags them as undefined names.
+"app/models/*.py" = ["F821"]

@@ -225,10 +225,10 @@ if __name__ == "__main__":
 
     result = run_chexnet(dummy_roi)
 
-    print(f"\nResult:")
+    print("\nResult:")
     print(f"  Label:      {result.label}")
     print(f"  Confidence: {result.confidence:.4f} (Platt-scaled)")
     print(f"  Top probs:  {result.probabilities}")
     print(f"  GradCAM:    '{result.gradcam_path}' (empty until gradcam.py runs)")
-    print(f"\nPRD contract check:")
-    print(f"  label ✓ | confidence ✓ | probabilities ✓ | gradcam_path ✓")
+    print("\nPRD contract check:")
+    print("  label ✓ | confidence ✓ | probabilities ✓ | gradcam_path ✓")

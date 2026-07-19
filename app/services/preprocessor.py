@@ -1400,7 +1400,7 @@ if __name__ == "__main__":
     Date: 01/15/2024
     """
     ner = run_ner(sample_text)
-    print(f"\nNER Output:")
+    print("\nNER Output:")
     print(f"  Conditions:  {ner.conditions}")
     print(f"  Medications: {ner.medications}")
     print(f"  Lab Values:  {[(lv.name, lv.value, lv.unit) for lv in ner.lab_values]}")

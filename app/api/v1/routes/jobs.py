@@ -1,10 +1,11 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime, timezone
 from uuid import UUID
 from celery.result import AsyncResult
 
+from app.core.auth import get_current_user
 from app.workers.job_status import revoke_task
 from app.workers.celery_app import celery_app
 
@@ -40,7 +41,7 @@ class RecentJobsResponse(BaseModel):
     response_model=JobStatusResponse,
     summary="Poll live Celery task status",
 )
-async def job_status(task_id: str):
+async def job_status(task_id: str, user=Depends(get_current_user)):
     """
     Real-time task state from Redis backend.
     States: PENDING → STARTED → SUCCESS | FAILURE | RETRY
@@ -74,7 +75,7 @@ async def job_status(task_id: str):
     "/{task_id}",
     summary="Cancel a queued or running task",
 )
-async def cancel_job(task_id: str, terminate: bool = False):
+async def cancel_job(task_id: str, terminate: bool = False, user=Depends(get_current_user)):
     """
     Revoke a Celery task. Set terminate=true to SIGTERM a running worker.
     Use with caution on GPU image tasks.
@@ -95,6 +96,7 @@ async def cancel_job(task_id: str, terminate: bool = False):
 )
 async def list_recent_jobs(
     limit: int = 20,
+    user=Depends(get_current_user),
 ):
     """
     Celery result backends do not provide portable task listing. The frontend
