@@ -62,6 +62,10 @@ xgboost==2.0.3
 --extra-index-url https://download.pytorch.org/whl/cpu
 torch==2.3.0+cpu
 torchvision==0.18.0+cpu
+segment-anything @ git+https://github.com/facebookresearch/segment-anything.git
+                                  # MedSAM/SAM segmentation (app/image_pipeline/segmentor.py).
+                                  # Was missing entirely — _run_segmentation_safe() caught the
+                                  # resulting ImportError and silently fell back to full-image.
 
 # ── NLP / LLM (Phase 1: install only; Phase 2: wire) ─────────────────────────
 transformers==4.41.1             # ClinicalBERT, BioGPT

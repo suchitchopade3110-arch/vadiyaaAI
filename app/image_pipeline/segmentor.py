@@ -702,6 +702,7 @@ def process_all(
     max_workers: int = 4,
     visualize: bool = True,
     export: bool = True,
+    predictor: Optional[SamPredictor] = None,
 ) -> Dict[str, List[SegmentationResult]]:
     """
     Master function — handles ALL input types:
@@ -716,6 +717,9 @@ def process_all(
         "dicom":    [...],   # SegmentationResult list from DICOM
       }
     """
+    if predictor is None:
+        predictor = get_predictor()
+
     all_results: Dict[str, List[SegmentationResult]] = {
         "standard": [],
         "dicom":    [],

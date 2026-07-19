@@ -7,3 +7,4 @@ from app.models.image_analysis import ImageAnalysis  # noqa
 from app.models.qr_access import QRAuditLog, QRToken  # noqa
 from app.models.user import User  # noqa
 from app.models.refresh_token import RefreshToken  # noqa
+from app.models.audit_log import AuditLog  # noqa

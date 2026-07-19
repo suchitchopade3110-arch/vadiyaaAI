@@ -15,6 +15,7 @@ from app.core.config import settings
 from app.core.logging import setup_logging
 from app.core.middleware import (
     APIContractMiddleware,
+    AuditLogMiddleware,
     CorrelationIDMiddleware,
     ErrorHandlerMiddleware,
     MaxBodySizeMiddleware,
@@ -106,11 +107,14 @@ app = FastAPI(
 )
 
 # Starlette wraps middleware in reverse registration order.
-# Keep CorrelationID outermost so APIContract/logging reuse the same request ID.
+# Keep CorrelationID outermost so APIContract/logging/audit reuse the same
+# request ID. AuditLogMiddleware must be added before CorrelationID so it
+# sits just inside it (request.state.request_id is already set by then).
 app.add_middleware(MaxBodySizeMiddleware)
 app.add_middleware(TimeoutMiddleware)
 app.add_middleware(APIContractMiddleware)
 app.add_middleware(ErrorHandlerMiddleware)
+app.add_middleware(AuditLogMiddleware)
 app.add_middleware(CorrelationIDMiddleware)
 app.add_middleware(
     CORSMiddleware,

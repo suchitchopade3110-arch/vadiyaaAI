@@ -35,6 +35,95 @@ class CorrelationIDMiddleware(BaseHTTPMiddleware):
         return response
 
 
+class AuditLogMiddleware(BaseHTTPMiddleware):
+    """Append-only HIPAA-technical-safeguard access log.
+
+    Writes one audit_logs row for every request under a tracked prefix
+    (claims, image/report analysis, patient history). Runs after
+    CorrelationIDMiddleware (added later in main.py, so it wraps this one)
+    so request.state.request_id is already set. Logs resource references
+    only — never claim text, report contents, or image bytes.
+    """
+
+    _TRACKED_PREFIXES = (
+        ("/api/v1/verify", "claim"),
+        ("/api/v1/analyze/image", "image_analysis"),
+        ("/api/v1/analyze/report", "report"),
+        ("/patients", "patient_history"),
+    )
+
+    async def dispatch(self, request: Request, call_next):
+        resource_type = next(
+            (rtype for prefix, rtype in self._TRACKED_PREFIXES if request.url.path.startswith(prefix)),
+            None,
+        )
+        if resource_type is None:
+            return await call_next(request)
+
+        response = await call_next(request)
+
+        try:
+            await self._write_log(request, response, resource_type)
+        except Exception as exc:
+            logger.warning("Audit log write failed (non-fatal): %s", exc)
+
+        return response
+
+    @staticmethod
+    def _decode_user_id(request: Request):
+        auth = request.headers.get("authorization", "")
+        if not auth.lower().startswith("bearer "):
+            return None
+        try:
+            from jose import jwt
+
+            payload = jwt.decode(auth.split(" ", 1)[1], settings.SECRET_KEY, algorithms=["HS256"])
+            return payload.get("sub")
+        except Exception:
+            return None
+
+    @staticmethod
+    def _resource_id(request: Request):
+        for key, value in request.path_params.items():
+            if key != "patient_id" and value is not None:
+                return str(value)
+        return None
+
+    async def _write_log(self, request: Request, response, resource_type: str):
+        import uuid as uuid_module
+
+        from app.db.session import AsyncSessionLocal
+        from app.models.audit_log import AuditLog
+
+        def _as_uuid(value):
+            try:
+                return uuid_module.UUID(str(value))
+            except (TypeError, ValueError):
+                return None
+
+        request_id = getattr(request.state, "request_id", None)
+        async with AsyncSessionLocal() as session:
+            session.add(
+                AuditLog(
+                    user_id=_as_uuid(self._decode_user_id(request)),
+                    action=f"{request.method.lower()}_{resource_type}",
+                    resource_type=resource_type,
+                    resource_id=self._resource_id(request),
+                    patient_id=_as_uuid(request.path_params.get("patient_id")),
+                    ip_address=request.client.host if request.client else None,
+                    user_agent=request.headers.get("user-agent"),
+                    status="success" if response.status_code < 400 else "failure",
+                    details={
+                        "request_id": request_id,
+                        "path": request.url.path,
+                        "method": request.method,
+                        "status_code": response.status_code,
+                    },
+                )
+            )
+            await session.commit()
+
+
 class TimeoutMiddleware(BaseHTTPMiddleware):
     """Safety net only — long-running work belongs in Celery, not a request handler."""
 
