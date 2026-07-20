@@ -1,12 +1,31 @@
 import io
 import json
 import uuid
+from datetime import datetime, timedelta, timezone
+
 import pytest
 from fastapi.testclient import TestClient
+from jose import jwt
 
+from app.core.config import settings
 from app.main import app
 
 client = TestClient(app)
+
+
+def _auth_headers(role: str = "clinician") -> dict:
+    """Bearer header for a live access token — these routes all require auth."""
+    token = jwt.encode(
+        {
+            "sub": str(uuid.uuid4()),
+            "role": role,
+            "type": "access",
+            "exp": datetime.now(timezone.utc) + timedelta(minutes=20),
+        },
+        settings.SECRET_KEY,
+        algorithm="HS256",
+    )
+    return {"Authorization": f"Bearer {token}"}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -52,25 +71,25 @@ def test_request_id_header():
 SAMPLE_CLAIM = "Aspirin reduces the risk of heart attack in adults over 50 with hypertension."
 
 def test_claim_pipeline_flow():
-    claim_id = str(uuid.uuid4())
-    # 1. Submit
+    # 1. Submit — claim_id is generated server-side (job_id), not passed in the URL.
     r = client.post(
-        f"/api/v1/verify/claim/{claim_id}",
+        "/api/v1/verify/claim",
         json={"claim_text": SAMPLE_CLAIM},
+        headers=_auth_headers(),
     )
     assert r.status_code == 202
     data = r.json()
     task_id = data["task_id"]
     assert "poll_url" in data
-    
+
     # 2. Poll Status
-    r = client.get(f"/api/v1/verify/claim/status/{task_id}")
+    r = client.get(f"/api/v1/verify/claim/status/{task_id}", headers=_auth_headers())
     assert r.status_code == 200
     assert "status" in r.json()
-    
+
     # 3. Get Result (might be 425 if not ready, but we check schema if possible)
     # Since we are using TestClient and it's async celery, it won't be ready.
-    r = client.get(f"/api/v1/verify/claim/result/{task_id}")
+    r = client.get(f"/api/v1/verify/claim/result/{task_id}", headers=_auth_headers())
     assert r.status_code in (425, 200)
 
 
@@ -91,12 +110,13 @@ def test_image_pipeline_flow():
     r = client.post(
         "/api/v1/analyze/image/xray",
         files={"file": ("test.png", io.BytesIO(fake_img), "image/png")},
+        headers=_auth_headers(),
     )
     assert r.status_code in (202, 422)
     if r.status_code == 202:
         task_id = r.json()["task_id"]
         # 2. Poll
-        r = client.get(f"/api/v1/analyze/image/status/{task_id}")
+        r = client.get(f"/api/v1/analyze/image/status/{task_id}", headers=_auth_headers())
         assert r.status_code == 200
 
 
@@ -111,12 +131,13 @@ def test_report_pipeline_flow():
     r = client.post(
         "/api/v1/analyze/report/lab",
         files={"file": ("labs.csv", io.BytesIO(SAMPLE_CSV), "text/csv")},
+        headers=_auth_headers(),
     )
     assert r.status_code == 202
     task_id = r.json()["task_id"]
-    
+
     # 2. Poll
-    r = client.get(f"/api/v1/analyze/report/status/{task_id}")
+    r = client.get(f"/api/v1/analyze/report/status/{task_id}", headers=_auth_headers())
     assert r.status_code == 200
 
 
@@ -127,8 +148,9 @@ def test_report_pipeline_flow():
 def test_T1_claim_too_short_rejected():
     """Claim under min_length returns 422."""
     r = client.post(
-        f"/api/v1/verify/claim/{uuid.uuid4()}",
+        "/api/v1/verify/claim",
         json={"claim_text": "short"},
+        headers=_auth_headers(),
     )
     assert r.status_code == 422
 
@@ -136,8 +158,9 @@ def test_T1_claim_too_short_rejected():
 def test_T2_claim_missing_field_rejected():
     """Missing claim_text returns 422."""
     r = client.post(
-        f"/api/v1/verify/claim/{uuid.uuid4()}",
+        "/api/v1/verify/claim",
         json={},
+        headers=_auth_headers(),
     )
     assert r.status_code == 422
 
@@ -148,6 +171,7 @@ def test_T3_report_csv_anomaly_flagged():
     r = client.post(
         "/api/v1/analyze/report/lab",
         files={"file": ("labs.csv", io.BytesIO(csv), "text/csv")},
+        headers=_auth_headers(),
     )
     assert r.status_code == 202
     data = r.json()
@@ -155,10 +179,15 @@ def test_T3_report_csv_anomaly_flagged():
 
 
 def test_T4_unsupported_file_format_rejected():
-    """Uploading .txt file returns 415."""
+    """Uploading an unsupported extension returns 415.
+
+    .txt is deliberately in REPORT_EXTENSIONS (plain-text clinical notes),
+    so it isn't a valid "unsupported" example — use .docx instead.
+    """
     r = client.post(
         "/api/v1/analyze/report/lab",
-        files={"file": ("report.txt", io.BytesIO(b"some text"), "text/plain")},
+        files={"file": ("report.docx", io.BytesIO(b"some text"), "application/octet-stream")},
+        headers=_auth_headers(),
     )
     assert r.status_code == 415
 
@@ -169,6 +198,7 @@ def test_T5_oversized_file_rejected():
     r = client.post(
         "/api/v1/analyze/report/lab",
         files={"file": ("big.pdf", big, "application/pdf")},
+        headers=_auth_headers(),
     )
     assert r.status_code == 413
 
@@ -176,8 +206,9 @@ def test_T5_oversized_file_rejected():
 def test_T6_disclaimer_in_all_text_responses():
     """Every text pipeline response includes medical disclaimer."""
     r = client.post(
-        f"/api/v1/verify/claim/{uuid.uuid4()}",
+        "/api/v1/verify/claim",
         json={"claim_text": SAMPLE_CLAIM},
+        headers=_auth_headers(),
     )
     data = r.json()
     assert "medical_disclaimer" in data
@@ -193,6 +224,7 @@ def test_I1_invalid_analysis_type_rejected():
     r = client.post(
         "/api/v1/analyze/image/ultrasound",
         files={"file": ("test.png", io.BytesIO(_make_fake_png()), "image/png")},
+        headers=_auth_headers(),
     )
     assert r.status_code == 422
 
@@ -201,6 +233,7 @@ def test_I2_image_ct_accepted():
     r = client.post(
         "/api/v1/analyze/image/ct",
         files={"file": ("ct.png", io.BytesIO(_make_fake_png()), "image/png")},
+        headers=_auth_headers(),
     )
     assert r.status_code in (202, 422)
 
@@ -209,6 +242,7 @@ def test_I3_image_mri_accepted():
     r = client.post(
         "/api/v1/analyze/image/mri",
         files={"file": ("mri.png", io.BytesIO(_make_fake_png()), "image/png")},
+        headers=_auth_headers(),
     )
     assert r.status_code in (202, 422)
 
@@ -217,6 +251,7 @@ def test_I4_image_skin_accepted():
     r = client.post(
         "/api/v1/analyze/image/skin",
         files={"file": ("skin.png", io.BytesIO(_make_fake_png()), "image/png")},
+        headers=_auth_headers(),
     )
     assert r.status_code in (202, 422)
 
@@ -225,5 +260,6 @@ def test_I5_image_pathology_accepted():
     r = client.post(
         "/api/v1/analyze/image/pathology",
         files={"file": ("path.png", io.BytesIO(_make_fake_png()), "image/png")},
+        headers=_auth_headers(),
     )
     assert r.status_code in (202, 422)
