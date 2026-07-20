@@ -94,6 +94,7 @@ async def submit_image_analysis(
 
     return {
         "job_id": task.id,
+        "task_id": task.id,
         "status": "queued",
         "poll_url": f"/api/v1/jobs/{task.id}",
         "estimated_seconds": 30,
