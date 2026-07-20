@@ -61,12 +61,10 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 # Intentional wildcard re-export barrel file.
 "app/schemas/schemas.py" = ["F403"]
-# Pre-existing issues in demo-only / dead code paths (process_all() is never
-# called outside commented-out example usage at the bottom of the file) and
-# unused-exception-binding/unused-local-set nits in ClinicalBERT NER helpers
-# these files' headers attribute to specific teammates — left for them
-# rather than touched as a side effect of adding CI.
-"app/image_pipeline/segmentor.py" = ["F821", "F841"]
+# Pre-existing unused-exception-binding/unused-local-set nits in ClinicalBERT
+# NER helpers this file's header attributes to a specific teammate — left for
+# them rather than touched as a side effect of adding CI.
+"app/image_pipeline/segmentor.py" = ["F841"]
 "app/services/preprocessor.py" = ["F841", "F811", "E741"]
 # SQLAlchemy relationship() forward references (Mapped["Claim"], etc.) are
 # quoted strings resolved later via the mapper registry — pyflakes has no

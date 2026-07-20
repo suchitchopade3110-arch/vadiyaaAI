@@ -551,6 +551,12 @@ The admin dashboard also triggers it on demand via `GET /api/v1/admin/bias-audit
 - **Rate limiting**: slowapi, backed by `settings.REDIS_URL` — applied to upload/analysis endpoints (`images`, `reports`, `claims`, `text`).
 - Report suspected vulnerabilities to the maintainers privately rather than filing a public issue.
 
+### Audit logging (HIPAA technical safeguard — partial)
+
+Every request under `/api/v1/verify`, `/api/v1/analyze/image`, `/api/v1/analyze/report`, and `/patients` writes an append-only row to the `audit_logs` table (`app/models/audit_log.py`, via `AuditLogMiddleware` in `app/core/middleware.py`): who (user ID from the JWT), what (action + resource type/ID), when, from where (IP/user-agent), and success/failure — never the underlying claim text, report contents, or image bytes. Query it via `GET /api/v1/admin/audit-log` (admin role required; filter by `user_id`, `patient_id`, `resource_type`, `action`, `status`, `start_date`, `end_date`).
+
+**This is one HIPAA technical safeguard (access logging), not HIPAA compliance.** Also required and out of scope for this pass: encryption at rest and in transit, a signed Business Associate Agreement with any third-party processor that sees PHI (Groq, for the LLM calls), and a formal risk assessment. Treat this as a building block, not a certification.
+
 ---
 
 ## 📝 Key Design Principles
